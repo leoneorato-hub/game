@@ -31,10 +31,18 @@
   // arto: segmento da (x0,y0) a (x1,y1); per ogni riga una fascia di colonne `cols`
   // (da sinistra a destra: luce → ombra). Pixel interi, nessun anti-aliasing.
   function limb(B, x0, y0, x1, y1, cols) {
-    const n = Math.max(1, Math.abs(y1 - y0));
+    const n = Math.max(1, Math.abs(y1 - y0), Math.abs(x1 - x0));
     for (let k = 0; k <= n; k++) {
       const t = k / n, y = Math.round(y0 + (y1 - y0) * t), x = Math.round(x0 + (x1 - x0) * t);
       for (let i = 0; i < cols.length; i++) if (cols[i] !== '.') dot(B, x + i, y, cols[i]);
+    }
+  }
+  // come limb ma la fascia è verticale (avambracci orizzontali): cols dall'alto in basso
+  function limbH(B, x0, y0, x1, y1, cols) {
+    const n = Math.max(1, Math.abs(x1 - x0), Math.abs(y1 - y0));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, y = Math.round(y0 + (y1 - y0) * t), x = Math.round(x0 + (x1 - x0) * t);
+      for (let i = 0; i < cols.length; i++) if (cols[i] !== '.') dot(B, x, y + i, cols[i]);
     }
   }
   const HEXC = {};
@@ -111,18 +119,18 @@
 
   // testa (14×13), origine (9,2)
   const Z_HEAD = [
-    '.....NNnNN....',
-    '...NNnhhnhNN..',
-    '..NnhhnnhLnLN.',
-    '.NnhhnnLlvLlvL',
-    'NvLlvLlvnhnnN.',
-    'NlnhnnhnnhaAa.',
-    'NnnnnhnsNNaNN.',
-    'NnnnnsdA01a32a',
-    'NnnnhddsaaaaAs',
-    '.NnnnNdsaaaas.',
-    '.NnnnNDsaaqs..',
-    '..NnN..Dsaas..',
+    '....NN.NNN....',
+    '...NnhNnhhNN..',
+    '..NhhnnhhLnLN.',
+    '.NnhnnnLlvLlvL',
+    'NvLlvLlvhhnnN.',
+    'NlnhhnnhnnaAa.',
+    'NhnnnhnsNNaNN.',
+    '.NnhnsdA01a32a',
+    'NnhnhddsaaaaAs',
+    'NhnnhNdsaaaas.',
+    '.NhnNNDsaqqs..',
+    '..NN...Dsaas..',
     '........DDs...',
   ];
   const Z_BLINK = ['ddadd']; // (17,9)
@@ -147,10 +155,9 @@
     '..mrRrrrrrm..',
     '..mrRrrmrrrm.',
     '.mrRrrrmrrrrm',
-    '.mrWrrWmrrWrm',
-    '.WWwrWWWWrWWW',
-    '.WwWWWwWWWwW.',
-    '..ww.ww.ww...',
+    '.mrWrrrmWrrrm',
+    '.mWWwrrWWwrWm',
+    '.WWWWwWWWWwWW',
   ];
   // mantello (dietro), origine (5,14)
   const Z_CAPE = [
@@ -174,6 +181,15 @@
     '.MrrmM.........',
     '..MM...........',
   ];
+  // lembo del mantello sulla spalla dietro, origine (8,14)
+  const Z_DRAPE = [
+    '..CCCC',
+    '.CcccgR',
+    'CccgcR.',
+    'CccgR..',
+    'CccR...',
+    'CcR....',
+  ];
   // spallaccio d'oro col teschio, origine (18,14)
   const Z_PAULD = [
     '.OooO.',
@@ -184,10 +200,10 @@
   ];
   // fiamme ai piedi (6×6), 4 varianti
   const Z_FIRE = [
-    ['..Z...', '.ZeZ.Z', 'ZefeZe', 'eEfFfe', 'efFFFe', '.eeee.'],
-    ['Z.....', 'eZ..Z.', 'ZeZZeZ', 'eEffEe', 'efFFfe', '.eeee.'],
-    ['...Z..', 'Z.ZeZ.', 'eZefeZ', 'eEFfEe', 'efFFFe', '.eeee.'],
-    ['.Z....', '.eZ.Z.', 'ZefZeZ', 'eEfFfe', 'eFFFfe', '.eeee.'],
+    ['..Z....', '.ZeZ...', '.eEe.Z.', 'ZeEfZeZ', 'eEfFeEe', 'eEFFfEe', 'eFFFFfe', '.eeeee.'],
+    ['....Z..', '...ZeZ.', 'Z..eEe.', 'eZ.ZfeZ', 'eEeEfEe', 'eEfFFEe', 'eFFFFfe', '.eeeee.'],
+    ['.......', '..Z...Z', '.ZeZ.Ze', '.eEeZeE', 'ZeffEfe', 'eEFFfEe', 'efFFFFe', '.eeeee.'],
+    ['...Z...', '..ZeZ..', '..eEeZ.', 'ZeEfeEZ', 'eEfFfEe', 'eFFFfEe', 'eFFFFfe', '.eeeee.'],
   ];
 
   // pose delle gambe: [anca vicina x, piede vicino x, piede vicino y, anca lontana x, piede lontano x, piede lontano y, dy busto]
@@ -218,12 +234,13 @@
     limb(B, L[0], 31, L[1], L[2], ['A', 'a', 's', 'd']);
     // fuoco ai piedi
     const fA = Z_FIRE[fire % 4], fB = Z_FIRE[(fire + 2) % 4];
-    put(B, L[4] - 1, L[5] - 2, fB);
-    put(B, L[1] - 1, L[2] - 2, fA);
+    put(B, L[4] - 2, L[5] - 3, fB);
+    put(B, L[1] - 2, L[2] - 3, fA);
     // chitone + busto + bandoliera
     put(B, 9 + hx, 26 + by, Z_SKIRT);
     put(B, 9 + hx, 14 + by, Z_TORSO);
     limb(B, 19 + hx, 18 + by, 13 + hx, 24 + by, ['B', 'b']);
+    put(B, 8 + hx, 14 + by, Z_DRAPE);
     // testa
     put(B, 9 + hx * 2, 2 + by, Z_HEAD);
     if (suf === '_bl' || hurt) put(B, 17 + hx * 2, 9 + by, Z_BLINK);
@@ -235,5 +252,98 @@
     put(B, 18 + hx, 14 + by, Z_PAULD);
     return B;
   }
-  regHero('zagreus', zagFrame, ZPAL, ZOUT, { hand: [23, 25], head: [16, 2] });
+  regHero('zagreus', zagFrame, ZPAL, ZOUT, { hand: [22, 25], head: [16, 2] });
+
+  // ===========================================================================
+  // IL TERRARIANO (Terraria) — 28×40
+  // Il personaggio iniziale "classico": testa grande, capelli castani con ciuffo,
+  // occhio bianco con iride, tunica verde oliva senza maniche sopra la camicia
+  // color crema a maniche lunghe, cintura con fibbia di rame, pantaloni marroni
+  // e scarponi grossi. Proporzioni tozze alla Terraria.
+  // ===========================================================================
+  const TW = 28, TH = 38;
+  const TPAL = {
+    S: '#f8cfa2', s: '#e3a677', d: '#b4704c', D: '#7a4434',
+    H: '#c48a4e', h: '#9a5f30', n: '#73411f', N: '#4a2612',
+    w: '#ffffff', i: '#2f56b0',
+    G: '#a6cc66', g: '#6f9c3c', k: '#456e2c', K: '#2b4824',
+    U: '#f6edd4', u: '#d2bf98', v: '#9c8a6a',
+    P: '#a8764a', p: '#7c5030', q: '#56341e',
+    B: '#7a5436', b: '#4e3420', x: '#2e1f14',
+    L: '#5c3a20', C: '#ffbf7a', c: '#c8723a',
+  };
+  const TOUT = {
+    S: '#3e1e18', s: '#3e1e18', d: '#3e1e18', D: '#3e1e18',
+    H: '#2a140a', h: '#2a140a', n: '#2a140a', N: '#2a140a',
+    G: '#1c2c16', g: '#1c2c16', k: '#1c2c16', K: '#1c2c16',
+    U: '#3a3020', u: '#3a3020', v: '#3a3020',
+  };
+  // testa (14×14), origine (7,2)
+  const T_HEAD = [
+    '...NN.NNN......',
+    '..NhhNnhhNN....',
+    '.NhHHhhhhhnNN..',
+    '.NhHhhhhhhhhnN.',
+    'NnhhhhnhhhhhhnN',
+    'NnhhhnhhhnhhhnN',
+    'NnnhnnhhnnhhnN.',
+    'NnnnnnnnSnSnN..',
+    'NnnnnndsSSwiSn.',
+    'NnnnnndsSSwiSs.',
+    '.NnnnNdsSSSSss.',
+    '..NNNNdsSSSSs..',
+    '......ddsssss..',
+    '.......dddd....',
+  ];
+  // busto (12×10), origine (8,16)
+  const T_TORSO = [
+    '.gGGUuUGGk..',
+    'gGGGGUGGGgk.',
+    'gGGGGGGGggk.',
+    'gGGGGGGgggk.',
+    'gGGGGGGgggk.',
+    'kgGGGGGggkk.',
+    'LLLLLcCcLLL.',
+    'gGGGGGGGggk.',
+    'gGGGgGGGggkk',
+    'kggkggkggkkk',
+  ];
+  const T_SHOE = ['BBBb..', 'BBBBBb', 'bbbbbx'];
+  const T_SHOE_FAR = ['bbbx..', 'bbbbbx', 'xxxxxx'];
+  // [anca vicina x, piede vicino x, piede vicino y, anca lontana x, piede lontano x, piede lontano y, dy busto]
+  const T_LEGS = {
+    st: [14, 15, 34, 10, 10, 34, 0],
+    w0: [14, 17, 34, 10, 8, 34, 0],
+    w1: [14, 14, 33, 10, 11, 34, -1],
+    w2: [14, 12, 34, 10, 13, 34, 0],
+    w3: [14, 15, 34, 10, 10, 33, -1],
+  };
+  function terrFrame(suf) {
+    const B = buf(TW, TH);
+    const walk = suf[1] === 'w', ph = walk ? +suf[2] : -1;
+    const Lg = T_LEGS[walk ? 'w' + ph : 'st'];
+    let dy = Lg[6];
+    if (suf === '_i1') dy = 1;
+    const hurt = suf === '_hu';
+    const hx = hurt ? -1 : 0, by = dy + (hurt ? 1 : 0);
+    const sw = walk ? (ph === 0 ? 1 : ph === 2 ? -1 : 0) : 0; // oscillazione braccia
+    // braccio dietro
+    limb(B, 8 + hx, 17 + by, 7 + hx - sw, 23 + by, ['u', 'v']);
+    put(B, 7 + hx - sw, 24 + by, ['sd']);
+    // gambe e scarponi
+    limb(B, Lg[3], 25, Lg[4], Lg[5] - 1, ['p', 'q', 'q']);
+    put(B, Lg[4] - 1, Lg[5], T_SHOE_FAR);
+    limb(B, Lg[0], 25, Lg[1], Lg[2] - 1, ['P', 'p', 'q']);
+    put(B, Lg[1] - 1, Lg[2], T_SHOE);
+    // busto e testa
+    put(B, 8 + hx, 16 + by, T_TORSO);
+    put(B, 7 + hx * 2, 2 + by, T_HEAD);
+    if (suf === '_bl' || hurt) put(B, 17 + hx * 2, 10 + by, hurt ? ['DS', 'SD'] : ['SS', 'DD']);
+    // braccio davanti: manica crema, avambraccio in avanti, pugno pronto
+    limb(B, 17 + hx, 17 + by, 17 + hx + sw, 20 + by, ['U', 'u', 'v']);
+    limbH(B, 18 + hx + sw, 21 + by, 19 + hx + sw, 21 + by, ['U', 'u']);
+    put(B, 20 + hx + sw, 21 + by, ['Ss', 'sd']);
+    return B;
+  }
+  regHero('terrarian', terrFrame, TPAL, TOUT, { hand: [21, 22], head: [13, 2] });
 })();
