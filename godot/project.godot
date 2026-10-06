@@ -1,0 +1,26 @@
+; Patchwork Eternity — prototipo Godot 4.3+
+
+config_version=5
+
+[application]
+
+config/name="Patchwork Eternity"
+config/description="Prototipo: tracciamento nemici + Aculeo automatico del Cavaliere"
+run/main_scene="res://scenes/test_arena.tscn"
+config/features=PackedStringArray("4.3")
+
+[autoload]
+
+EnemyTracker="*res://scripts/core/enemy_tracker.gd"
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=360
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="viewport"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
