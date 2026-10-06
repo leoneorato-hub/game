@@ -333,12 +333,12 @@ function buildTile(base, dark, light, kind) {
 let TILES = null;
 function initTiles() {
   TILES = {
-    hk: buildTile('#24304a', '#1b2438', '#34445f', 'stone'),
-    hades: buildTile('#4a1f24', '#38161a', '#5e2a2e', 'tile'),
-    celeste: buildTile('#9aa6bf', '#8290aa', '#c4cee0', 'snow'),
-    terra: buildTile('#3a5226', '#2e421e', '#4e6a32', 'grass'),
-    blas: buildTile('#5a4428', '#46341e', '#6e5534', 'stone'),
-    station: buildTile('#b9c2c0', '#a3adab', '#cfd6d4', 'ceramic'),
+    hk: paintTile({ base: '#24304a', dark: '#151d30', light: '#34445f', kind: 'cobble' }, 1),
+    hades: paintTile({ base: '#4a1f24', dark: '#2a1014', light: '#5e2a2e', kind: 'bricks' }, 2),
+    celeste: paintTile({ base: '#b4c2d8', dark: '#8a9ab4', light: '#e8f0ff', kind: 'snow' }, 3),
+    terra: paintTile({ base: '#3a5226', dark: '#26381a', light: '#4e6a32', kind: 'grass' }, 4),
+    blas: paintTile({ base: '#5a4428', dark: '#34261a', light: '#6e5534', kind: 'sand' }, 5),
+    station: paintTile({ base: '#c4ccca', dark: '#8a9290', light: '#e2e8e6', kind: 'bricks' }, 6),
   };
 }
 

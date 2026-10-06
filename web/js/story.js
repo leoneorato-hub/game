@@ -282,6 +282,9 @@ function drawPortrait(cnv, who) {
     try { BOSSES[v.boss].draw(c, fake, cnv.width / 3.2, cnv.height / 2.6 + 6); } catch (e) { /* ritratto non disponibile */ }
     c.restore();
     camX = sx; camY = sy;
+  } else if (who === 'v1' && typeof V1REF !== 'undefined' && V1REF.complete && V1REF.naturalWidth) {
+    const k = Math.min(cnv.width / V1REF.naturalWidth, cnv.height / V1REF.naturalHeight) * 1.3;
+    c.drawImage(V1REF, Math.round(cnv.width / 2 - V1REF.naturalWidth * k / 2), Math.round(cnv.height * 0.12), V1REF.naturalWidth * k, V1REF.naturalHeight * k);
   } else if (v.spr && SPR[v.spr]) {
     const s = SPR[v.spr];
     const sc = Math.floor(Math.min(cnv.width / s.w, cnv.height / s.h) * 0.8);

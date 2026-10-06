@@ -1,4 +1,5 @@
 'use strict';
+const V1REF = new Image(); V1REF.src = 'assets/v1_ref.png';
 // =============================================================================
 // UI (Alfa 2) — menu, Storia, selezione animata, Merceria, level-up, scelte,
 // pausa e "scontrino" di fine run. Mouse, tastiera (frecce + INVIO, ESC),
@@ -80,11 +81,12 @@ const UI = {
         const x = cnv.getContext('2d'); x.imageSmoothingEnabled = false;
         x.clearRect(0, 0, cnv.width, cnv.height);
         const sel = this.sel.char === c.id;
-        let n = c.spr; if (sel) { const ph = Math.floor(t * 8) % 4; if (ph === 1) n += '_w1'; if (ph === 3) n += '_w2'; }
+        let n = sel ? c.spr + '_w' + (Math.floor(t * 9) % 4) : c.spr + ((t + i * 0.7) % 3.3 < 0.12 ? '_bl' : Math.sin(t * 2.6 + i) > 0 ? '_i1' : '_i0');
         const s = SPR[n] || SPR[c.spr];
         const bob = sel ? 0 : (Math.sin(t * 3 + i) > 0.6 ? 1 : 0);
         x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(24, 52, 12, 3, 0, 0, TAU); x.fill();
-        x.drawImage(s.img, Math.round(24 - s.w * 1.5), Math.round(52 - s.h * 3 + bob), s.w * 3, s.h * 3);
+        const k = c.id === 'v1' ? 1.25 : 1.5;
+        x.drawImage(s.img, Math.round(24 - s.w * k / 2), Math.round(54 - s.h * k), s.w * k, s.h * k);
       } });
     });
     const pc = $('#char-portrait');
@@ -103,11 +105,16 @@ const UI = {
       const picked = this.pickedT && t - this.pickedT < 0.6;
       const jump = picked ? Math.sin((t - this.pickedT) / 0.6 * Math.PI) * 18 : 0;
       const ph = Math.floor(t * 7) % 4;
-      let n = c.spr; if (ph === 1) n += '_w1'; if (ph === 3) n += '_w2';
-      const s = SPR[n] || SPR[c.spr], sc = 6;
+      let n = c.spr + '_w' + ph;
+      const s = SPR[n] || SPR[c.spr], sc = 4;
       x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.ellipse(80, 140, 34 - jump * 0.8, 6, 0, 0, TAU); x.fill();
       if (c.id === 'madeline') { x.fillStyle = '#d1343a'; for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(80 - 14 - i * 10, 60 + i * 5 + Math.sin(t * 6 + i) * 2 - jump, 15 - i * 1.6, 0, TAU); x.fill(); } }
-      x.drawImage(picked ? s.white : s.img, Math.round(80 - s.w * sc / 2), Math.round(140 - s.h * sc - jump), s.w * sc, s.h * sc);
+      if (c.id === 'v1' && V1REF.complete && V1REF.naturalWidth) {
+        const k = 2, bob = Math.round(Math.sin(t * 2.5) * 2);
+        if (picked) x.filter = 'brightness(3)';
+        x.drawImage(V1REF, Math.round(80 - V1REF.naturalWidth * k / 2), Math.round(146 - V1REF.naturalHeight * k - jump + bob), V1REF.naturalWidth * k, V1REF.naturalHeight * k);
+        x.filter = 'none';
+      } else x.drawImage(picked ? s.white : s.img, Math.round(80 - s.w * sc / 2), Math.round(140 - s.h * sc - jump), s.w * sc, s.h * sc);
     } });
     this.pickChar(this.sel.char, true);
     $('#b-chars-next').textContent = this.mode === 'story' ? 'Scegli il capitolo →' : 'Scegli la toppa →';
@@ -129,7 +136,7 @@ const UI = {
         <dt>Abilità <kbd>SPAZIO</kbd></dt><dd><b>${esc(c.abilityName)}</b>: ${esc(c.abilityHint)}${c.id === 'v1' ? ' · <kbd>Q</kbd> cambia arma' : ''}</dd>
         <dt>Difficoltà</dt><dd>${'◆'.repeat(c.diff)}${'◇'.repeat(3 - c.diff)}</dd>
       </dl>`;
-    const [who, text] = CHAR_SELECT[id][0];
+    const [who, text] = vary('sel' + id, SELECT_ALT[id]);
     $('#char-voice-name').textContent = (VOICES[who] || {}).name || '';
     this.say($('#char-voice'), who, text);
     if (!silent) sfx('ui');
@@ -332,6 +339,7 @@ const UI = {
     sfx('evo');
     fxRing(G.p.x, G.p.y, 4, 34, o.godCol || '#e2b04a', 0.4, 2);
     G.p.castT = 0.4; G.p.castCol = o.godCol || '#ffd23f';
+    if (Math.random() < 0.45) bark('lvl');
     setTimeout(() => {
       if (G.pendingLv > 0) { this.openLevelUp(); return; }
       this.hideAll();
@@ -388,6 +396,7 @@ const UI = {
       terrarian: ['La Guida: «Fantastico! Ora che ne dici di costruire una casa qui?»', 'La Guida: «Hai provato a costruire una casa? Le case risolvono quasi tutto.»'],
       isaac: ['…e Isaac, per una volta, smise di piangere.', '*singhiozza*'],
     }[c.id];
+    if (END_ALT[c.id]) { lines[0] = vary('ew' + c.id, END_ALT[c.id].win); lines[1] = vary('el' + c.id, END_ALT[c.id].lose); }
     const reason = G.reason === 'continue' ? 'IL CONTINUE è arrivato a zero.' : G.reason === 'panic' ? 'L\'attacco di panico ha avuto la meglio.' : '';
     $('#end-title').textContent = win ? (G.stage.id === 'finale' && G.mode === 'story' ? 'LA COPERTA È SCUCITA' : 'TOPPA RICUCITA') : 'GAME OVER';
     $('#end-title').className = win ? 'win' : 'lose';
@@ -467,7 +476,7 @@ function stageThumb(id) {
     x.strokeStyle = '#8c6a2f'; x.beginPath(); x.arc(48, 27, 60, 0, TAU); x.stroke();
   } else if (st && st.world) {
     const d = st.world;
-    const tiles = d.tiles.map(tileKind);
+    const tiles = d.tiles.map((t, i) => paintTile(t, i));
     for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) x.drawImage(tiles[(i + j) % tiles.length], i * 32, j * 32);
     const props = d.props;
     for (let k = 0; k < 4; k++) { const pr = props[k % props.length]; const s = SPR[pr.spr]; x.drawImage(s.img, 10 + k * 22, 40 - s.h); }

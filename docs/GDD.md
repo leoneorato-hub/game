@@ -1022,3 +1022,26 @@ Si combinano in tre **Duetti**: *Cucito Esplosivo*, *Schegge di Ghiaccio* e *Avi
 ### Altre modifiche
 - **Grafica:** sprite più grandi e ombreggiati con camminata a 3 fotogrammi, luci dinamiche, particelle d'ambiente per ogni mondo, cambio d'atmosfera a metà run, armi visibili in mano (V1 cambia arma con l'animazione "SWITCH"; il Terrariano usa l'oggetto sopra la testa come in Terraria), i capelli di Madeline che ondeggiano, schede col titolo dei boss.
 - **Bilanciamento:** eroi indeboliti (danno base −10%, curva dell'esperienza più ripida) e nemici indeboliti (danno −20%, vita che cresce più lentamente). Il raggio di raccolta passa da 40 a 50 px.
+
+## 11. Alfa 0.3 — Note di rilascio
+
+- **Nuovo stile grafico** (`web/js/pix.js`): rasterizzatore con rampe di 5 toni con hue-shift, luce dall'alto a sinistra, ombre di contatto, selective outline e materiali emissivi. Lo stile si ispira alla reference di V1 fornita.
+- **Sprite ridisegnati**:
+  - 8 eroi con animazioni di respiro, battito di ciglia, camminata a 4 frame e frame di danno (`art_heroes.js`);
+  - 49 tra nemici e mini-boss, con 2 frame ciascuno;
+  - 9 boss, con frame propri per la fase 2 (`art_world.js`).
+- **Fix dell'XP**: le gemme attratte non orbitano più attorno al personaggio. L'homing ora è diretto, senza inerzia, e la raccolta è garantita.
+- **Armi visibili e animate** (`art_fx.js`):
+  - sprite dedicati per ogni arma;
+  - swing con easing e afterimage, scie a mezzaluna e scintille sugli impatti;
+  - V1 punta l'arma attiva, con rinculo, flash della bocca da fuoco e bossoli espulsi.
+- **Sfondi**: tile dipinte proceduralmente (ciottoli, mattoni, marmo, greco, neve, erba, sabbia, vuoto), oggetti di scena dipinti, raggi di luce e vignettatura.
+- **HUD**:
+  - barre con gradiente, scia del danno e riflesso;
+  - badge del livello e targa del timer;
+  - barra boss ornata;
+  - slot armi a medaglione con cooldown a torta;
+  - ritratto circolare.
+- **Voice line variabili** (`voices3.js`):
+  - pool alternativi senza ripetizioni consecutive per selezione, saluti, intro e sconfitta dei boss, incontri e finali;
+  - battute contestuali in gioco (level-up, HP basso, evoluzione, boss, evento, inattività).

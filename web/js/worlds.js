@@ -135,7 +135,7 @@ function makeWorld(d) {
     bg: d.bg, dark: d.dark, story: true, world: d,
     table: d.table,
     init() {
-      if (!tiles) tiles = d.tiles.map(tileKind);
+      if (!tiles) tiles = d.tiles.flatMap((t, i) => [0, 1, 2].map(k => paintTile(t, i * 10 + k + d.id.length * 31)));
       G.world = d; G.mood2 = false; G.moodK = 0; G.amb = []; G.wind = null; G.windT = 18;
       d.init?.();
     },
@@ -198,6 +198,8 @@ function makeWorld(d) {
       d.drawFloor?.(c);
     },
     drawOver(c) {
+      if (d.rays) drawRays(c, d.rays);
+      c.drawImage(VIGNETTE, 0, 0);
       if (G.moodK > 0 && d.mood2?.tint) { c.globalAlpha = G.moodK; c.fillStyle = d.mood2.tint; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }
       if (G.wind) { c.strokeStyle = 'rgba(220,240,255,.35)'; for (let i = 0; i < 14; i++) { const y = (i * 53 + G.t * 40) % H, x = (i * 97 + G.t * 300 * G.wind.x) % W; c.beginPath(); c.moveTo((x + W) % W, (y + H) % H); c.lineTo((x + W) % W + G.wind.x * 24, (y + H) % H + G.wind.y * 24); c.stroke(); } }
       d.drawOver?.(c);
@@ -288,7 +290,7 @@ const WORLDS = {
     hazards: ['Dopo il mini-boss sorge la Luna di Sangue'],
     mini: 'eocboss', boss: 'moonlord', bossSub: 'Il raggio della morte gira: muoviti nella stessa direzione',
     bg: '#0a1020', dark: 0.5,
-    tiles: [{ base: '#2c4a22', dark: '#203818', light: '#3c602e', kind: 'grass' }, { base: '#4a3622', dark: '#3a2a1a', light: '#5e4630', kind: 'dirt' }, { base: '#2e4c24', dark: '#223a1a', light: '#3e6230', kind: 'grass' }],
+    tiles: [{ base: '#2c4a22', dark: '#203818', light: '#3c602e', kind: 'grass' }, { base: '#30502a', dark: '#223a1a', light: '#46703a', kind: 'grass' }, { base: '#2e4c24', dark: '#223a1a', light: '#3e6230', kind: 'grass' }],
     props: [{ spr: 'p_tree', ch: 0.05 }, { spr: 'p_flower', ch: 0.06 }, { spr: 'p_torch', ch: 0.012, light: { r: 40, col: '#ffd27a' } }],
     amb: { type: 'dust', n: 40, cols: ['#ffffff', '#ffe680', '#bfe4ff'] },
     mood2: { name: 'UNA LUNA DI SANGUE STA SORGENDO…', sub: 'Più nemici, più esperienza', col: '#e0303a', tint: 'rgba(170,0,20,.2)' },
@@ -330,6 +332,18 @@ const WORLDS = {
     table: t => (t < 90 ? [['husk', 2], ['filth', 2], ['wretch', 2], ['dustbunny', 2], ['zombie', 2], ['condemned', 2], ['tzombie', 2], ['gaper', 2]] : [['aspid', 2], ['stray', 2], ['witch', 2], ['seeker', 2], ['archer', 2], ['stoner', 2], ['slime', 2], ['clotty', 2], ['wretch', 2]]),
   },
 };
+// Alfa 3: oggetti di scena dipinti, più grandi e più vari; raggi di luce
+const PROPS3 = {
+  hallownest: { props: [{ spr: 'p_stalag', ch: 0.05 }, { spr: 'p_statue', ch: 0.012 }, { spr: 'p_lamp', ch: 0.02, light: { r: 50, col: '#9fe0ff' } }, { spr: 'p_lumafly', ch: 0.03, light: { r: 30, col: '#9fe0ff' } }, { spr: 'p_bones', ch: 0.02 }, { spr: 'p_infect', ch: 0.015, light: { r: 20, col: '#ff9a2a' } }], rays: 'rgba(160,200,255,A)' },
+  inferno: { props: [{ spr: 'p_pillar_gold', ch: 0.025 }, { spr: 'p_lava', ch: 0.04, light: { r: 34, col: '#ff6a2a' } }, { spr: 'p_skulls', ch: 0.035 }, { spr: 'p_bones', ch: 0.02 }], rays: 'rgba(255,120,60,A)' },
+  tartaro: { props: [{ spr: 'p_column', ch: 0.03 }, { spr: 'p_urn', ch: 0.025 }, { spr: 'p_soulfire', ch: 0.03, light: { r: 36, col: '#3ad08a' } }, { spr: 'p_skulls', ch: 0.015 }], rays: 'rgba(120,255,180,A)' },
+  celeste: { props: [{ spr: 'p_pine', ch: 0.045 }, { spr: 'p_drift', ch: 0.05 }, { spr: 'p_crystal', ch: 0.02, light: { r: 24, col: '#7ac0ff' } }, { spr: 'p_rock', ch: 0.02 }] },
+  deadcells: { props: [{ spr: 'p_torch', ch: 0.025, light: { r: 44, col: '#ffb03a' } }, { spr: 'p_chain', ch: 0.03 }, { spr: 'p_cage', ch: 0.02 }, { spr: 'p_barrel', ch: 0.025 }, { spr: 'p_banner', ch: 0.012 }], rays: 'rgba(170,255,190,A)' },
+  cvstodia: { props: [{ spr: 'p_candles', ch: 0.04, light: { r: 32, col: '#ffd27a' } }, { spr: 'p_altar', ch: 0.015, light: { r: 26, col: '#ffe680' } }, { spr: 'p_banner', ch: 0.015 }, { spr: 'p_blood', ch: 0.04 }, { spr: 'p_bones', ch: 0.02 }], rays: 'rgba(255,220,150,A)' },
+  terraria: { props: [{ spr: 'p_tree', ch: 0.035 }, { spr: 'p_flower', ch: 0.06 }, { spr: 'p_rock', ch: 0.02 }, { spr: 'p_torch', ch: 0.01, light: { r: 44, col: '#ffd27a' } }] },
+  basement: { props: [{ spr: 'p_rock', ch: 0.05 }, { spr: 'p_tinted', ch: 0.008, light: { r: 16, col: '#5fb3ff' } }, { spr: 'p_poop', ch: 0.03 }, { spr: 'p_blood', ch: 0.05 }, { spr: 'p_bones', ch: 0.015 }] },
+};
+for (const [id, v] of Object.entries(PROPS3)) { WORLDS[id].props = v.props; if (v.rays) WORLDS[id].rays = v.rays; }
 for (const [id, d] of Object.entries(WORLDS)) STAGES[id] = makeWorld(d);
 
 // Ordine della Storia
@@ -393,6 +407,7 @@ const EVENT_ORDER = ['capture', 'encounter', 'escort', 'bounty'];
 function startEvent() {
   const p = G.p;
   const kind = EVENT_ORDER[G.evIdx++ % EVENT_ORDER.length];
+  setTimeout(() => bark('event'), 1600);
   const at = (dmin, dmax) => { const a = rnd(TAU), d = rnd(dmin, dmax); return G.stage.clampPos(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); };
   if (kind === 'capture') {
     const [x, y] = at(150, 210);

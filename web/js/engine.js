@@ -207,7 +207,7 @@ function hurtEnemy(e, dmg, o = {}) {
   if (G.passives.length && !o.relicEcho) relicOnHit(e, d, o);
   if (e.linkT > 0) e.linkT -= 0.01;
   if (SET.dmgNums || crit) fxText(e.x + rnd(-4, 4), e.y - e.r - 4, crit ? Math.round(d) + '!' : Math.round(d), crit ? '#ffd23f' : '#fff', 0.5);
-  if (!o.silent) sfx('hit');
+  if (!o.silent) { sfx('hit'); if (G.fx.length < 700) for (let i = 0; i < 2; i++) { const a = Math.atan2(o.ky || rnd(-1, 1), o.kx || rnd(-1, 1)) + rnd(-0.9, 0.9), sp = rnd(60, 140); G.fx.push({ k: 'spark', x: e.x, y: e.y - 2, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.18, max: 0.18, col: crit ? '#ffd23f' : '#fff6e0' }); } }
   if (e.hp <= 0) killEnemy(e, o);
   return d;
 }
@@ -263,6 +263,7 @@ function hurtPlayer(amount, src) {
   G.hitT = 0;
   eventHurt();
   G.hurtFlash = 0.15;
+  { const low = mode === 'anxiety' ? p.hp > 70 : p.hp < p.maxHp * 0.35; if (low && (G.barkLowT || 0) < G.t) { G.barkLowT = G.t + 15; bark('low'); } }
   shake(3);
   sfx('hurt');
   fxParticles(p.x, p.y, '#ff4a5a', 8, 80, 0.3);
@@ -511,11 +512,13 @@ function updateGems(dt) {
     const dd = d2(g.x, g.y, p.x, p.y);
     if (!g.fly && dd < mag * mag) g.fly = true;
     if (g.fly) {
-      const [nx, ny] = norm(p.x - g.x, p.y - g.y);
-      g.vx += nx * 900 * dt; g.vy += ny * 900 * dt;
-      const sp = Math.hypot(g.vx, g.vy); if (sp > 420) { g.vx *= 420 / sp; g.vy *= 420 / sp; }
-      g.x += g.vx * dt; g.y += g.vy * dt;
-      if (dd < 64) {
+      // Inseguimento diretto: velocità scalare crescente, nessuna inerzia laterale
+      // (prima la velocità si accumulava e le gemme orbitavano intorno al giocatore).
+      g.spd = Math.min(560, (g.spd || 60) + 1100 * dt);
+      const d = Math.sqrt(dd), step = g.spd * dt;
+      if (d <= step + p.r + 4) { g.x = p.x; g.y = p.y; }
+      else { g.x += (p.x - g.x) / d * step; g.y += (p.y - g.y) / d * step; }
+      if (d <= step + p.r + 4) {
         g.dead = true;
         G.thread += g.v * 0.15; G.gemsTaken = (G.gemsTaken || 0) + 1;
         G.xp += g.v * G.s.growth * (G.char.xpMul ? G.char.xpMul() : 1) * (G.xpEventMul || 1) * (owned('pact') && owned('collector') ? 1.15 : 1);

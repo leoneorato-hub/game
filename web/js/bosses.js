@@ -493,11 +493,11 @@ const BOSSES = {
     name: 'Il Signore della Luna', title: 'Il Signore della Luna si è risvegliato!', hp: 4200, r: 20, spd: 26, col: '#7ff0e0', voice: 'moonlord', home: 'terrarian', mv: 'keep', keep: 130,
     phase2: true, p2line: '[L\'occhio nel petto si spalanca]',
     patterns: [
-      { f: function* (e) { for (const s of [-1, 1]) { const hx = e.x + s * 44, hy = e.y + 8; for (let i = 0; i < 3; i++) eShootB(hx, hy, Math.atan2(G.p.y - hy, G.p.x - hx) + (i - 1) * 0.2, 150, 14, { col: '#7ff0e0', kind: 'orb' }); yield 0.3; } }, w: 2 },
+      { f: function* (e) { for (const s of [-1, 1]) { const hx = e.x + s * 38, hy = e.y - 12; for (let i = 0; i < 3; i++) eShootB(hx, hy, Math.atan2(G.p.y - hy, G.p.x - hx) + (i - 1) * 0.2, 150, 14, { col: '#7ff0e0', kind: 'orb' }); yield 0.3; } }, w: 2 },
       { f: e => gHoming(e, 5, 80, 14, '#7ff0e0', 1.6, 6), w: 1.5 },
       { f: e => gBeam(e, { tele: 1.0, len: 420, w: 10, dmg: 24, dur: 1.4, sweep: 0.9, col: '#7ff0e0' }), w: 1.6 },
       { f: e => gSummon(e, 'demoneye', 5, 50), w: 0.8 },
-      { f: function* (e) { for (const s of [-1, 1]) yield* gBeam(e, { tele: 0.6, len: 300, w: 6, dmg: 18, dur: 0.4, col: '#7ff0e0', from: [e.x + s * 44, e.y + 8] }); }, w: 1.5, p2: true },
+      { f: function* (e) { for (const s of [-1, 1]) yield* gBeam(e, { tele: 0.6, len: 300, w: 6, dmg: 18, dur: 0.4, col: '#7ff0e0', from: [e.x + s * 38, e.y - 12] }); }, w: 1.5, p2: true },
       { f: e => gRadial(e, 20, 90, 12, '#7ff0e0', 'orb', 3, 0.4, 0.15), w: 1.2, p2: true },
     ],
     draw(c, e, x, y) {
@@ -533,7 +533,7 @@ const BOSSES = {
     patterns: [
       { f: function* (e) { yield* gSlam(e, { tele: 1.1, r: 30, dmg: 24, ring: 0 }); e.takeMul = 1.4; yield 1.3; e.takeMul = 1; e.air = true; e.hidden = true; e.tx = e.x; e.ty = e.y; e.airT = 0.01; e.airMax = 0.3; yield 0.4; }, w: 3, shout: ['Isaac!', 'Dove sei?!'] },
       { f: e => gSummon(e, 'gaper', 3, 120), w: 1, shout: ['Aiutatemi a trovarlo!'] },
-      { f: function* (e) { const a = rnd(TAU), d = 170; const hx = G.p.x + Math.cos(a) * d, hy = G.p.y + Math.sin(a) * d; for (let i = 0; i < 6; i++) eShootB(hx, hy, Math.atan2(G.p.y - hy, G.p.x - hx) + (i - 2.5) * 0.15, 120, 14, { col: '#c41e2a', kind: 'orb' }); fxRing(hx, hy, 4, 20, '#ffffff', 0.5, 2); yield 0.8; }, w: 1.5 },
+      { f: function* (e) { const a = rnd(TAU), d = 170; const hx = G.p.x + Math.cos(a) * d, hy = G.p.y + Math.sin(a) * d; for (let i = 0; i < 6; i++) eShootB(hx, hy, Math.atan2(G.p.y - hy, G.p.x - hx) + (i - 2.5) * 0.15, 120, 14, { col: '#c41e2a', kind: 'orb' }); G.fx.push({ k: 'img', spr: 'B_momeye_0', x: hx, y: hy, life: 0.9, max: 0.9 }); yield 0.8; }, w: 1.5 },
       { f: e => gRain(e, 6, { area: 120, r: 18, tele: 0.9, dmg: 16, col: '#c41e2a' }), w: 1.3, p2: true },
     ],
     draw(c, e, x, y) {
@@ -590,9 +590,47 @@ for (const [id, def] of Object.entries(BOSSES)) {
     draw: def.spr ? (c, e, x, y) => bossDraw(c, e, x, y) : (c, e, x, y) => bossDraw(c, e, x, y),
   };
   if (def.spr) def.draw = (c, e, x, y) => {
-    const s = SPR[def.spr], sc = 1.5;
-    const img = e.flash > 0 ? s.white : ((e.face || 1) < 0 ? s.flip : s.img);
-    c.strokeStyle = `rgba(226,176,74,${0.5 + 0.3 * Math.sin(G.t * 6)})`; c.beginPath(); c.ellipse(x, y + s.h * sc / 2 - 2, e.r + 6, (e.r + 6) * 0.4, 0, 0, TAU); c.stroke();
-    c.drawImage(img, Math.round(x - s.w * sc / 2), Math.round(y - s.h * sc / 2 - Math.abs(Math.sin(G.t * 6)) * 1.5), s.w * sc, s.h * sc);
+    const fr = Math.floor(G.t * 5) % 2 && SPR[def.spr + '_b'] ? def.spr + '_b' : def.spr;
+    const s = SPR[fr];
+    const img = e.flash > 0 ? ((e.face || 1) < 0 ? s.flipWhite : s.white) : ((e.face || 1) < 0 ? s.flip : s.img);
+    c.strokeStyle = `rgba(226,176,74,${0.5 + 0.3 * Math.sin(G.t * 6)})`; c.beginPath(); c.ellipse(x, y + e.r, e.r + 8, (e.r + 8) * 0.35, 0, 0, TAU); c.stroke();
+    c.drawImage(img, Math.round(x - s.w / 2), Math.round(y + e.r - s.h));
   };
 }
+
+// --- Alfa 3: i boss usano gli sprite dipinti (con variante di seconda fase) ----------
+function bossSprite(c, e, x, y, id, o = {}) {
+  const key = 'B_' + id + (e.p2 && SPR['B_' + id + '_p2'] ? '_p2' : (Math.floor(G.t * 3) % 2 ? '_1' : '_0'));
+  const s = SPR[key];
+  const flip = !o.noFlip && (e.face || 1) < 0;
+  const img = e.flash > 0 ? (flip ? s.flipWhite : s.white) : (flip ? s.flip : s.img);
+  const bob = e.p2 ? Math.round(Math.sin(G.t * 6)) : 0;
+  c.drawImage(img, Math.round(x - s.w / 2), Math.round(y + e.r - s.h + (o.oy || 0) + bob));
+  return s;
+}
+BOSSES.hollowknight.draw = (c, e, x, y) => {
+  bossSprite(c, e, x, y, 'hollowknight', { noFlip: true });
+  const a = angTo(e), s = SPR.W_nail;
+  c.save(); c.translate(x + 6, y - 8); c.rotate(a); if (Math.cos(a) < 0) c.scale(1, -1); c.drawImage(s.img, -2, -s.h / 2, s.w * 1.3, s.h * 1.3); c.restore();
+};
+BOSSES.gabriel.draw = (c, e, x, y) => { bossSprite(c, e, x, y, 'gabriel'); };
+BOSSES.hades.draw = (c, e, x, y) => { if (e.cloak) c.globalAlpha = 0.22; bossSprite(c, e, x, y, 'hades'); c.globalAlpha = 1; };
+BOSSES.handofking.draw = (c, e, x, y) => { bossSprite(c, e, x, y, 'handofking'); if (e.p2) { c.fillStyle = `rgba(255,106,42,${0.2 + 0.15 * Math.sin(G.t * 10)})`; c.beginPath(); c.arc(x, y - 8, 30, 0, TAU); c.fill(); } };
+BOSSES.escribar.draw = (c, e, x, y) => { bossSprite(c, e, x, y, 'escribar', { noFlip: true, oy: Math.round(Math.sin(G.t * 1.6) * 3) }); };
+BOSSES.moonlord.draw = (c, e, x, y) => { bossSprite(c, e, x, y, 'moonlord', { noFlip: true }); };
+BOSSES.mom.draw = (c, e, x, y) => { bossSprite(c, e, x, y, 'mom', { noFlip: true }); };
+BOSSES.cucitrice.draw = (c, e, x, y) => {
+  const t = G.t;
+  for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; const sx = x + Math.cos(a) * 30, sy = y - 24 + Math.sin(a) * 12; c.strokeStyle = 'rgba(226,176,74,.5)'; c.beginPath(); c.moveTo(x, y - 30); c.lineTo(sx, sy); c.stroke(); c.drawImage(SPR.spool.img, Math.round(sx - 6), Math.round(sy - 7)); }
+  bossSprite(c, e, x, y, 'cucitrice', { noFlip: true, oy: Math.round(Math.sin(t * 2) * 3) });
+  if (e.mask) txt(c, BOSSES[e.mask].name.split(' ')[0].toUpperCase(), x, y + e.r + 4, '#a89a88', 8, 'center');
+};
+BOSSES.badelineboss.draw = (c, e, x, y) => {
+  const t = G.t;
+  for (let i = 0; i < 7; i++) { c.fillStyle = `rgba(150,60,200,${0.28 - i * 0.035})`; c.beginPath(); c.arc(x - (e.face || 1) * (6 + i * 5), y - 30 + Math.sin(t * 5 + i) * 3, 7 - i * 0.7, 0, TAU); c.fill(); }
+  const moving = Math.abs(e.vx) + Math.abs(e.vy) > 5;
+  const s = SPR['badeline' + (moving ? '_w' + (Math.floor(t * 10) % 4) : (Math.sin(t * 3) > 0 ? '_i1' : '_i0'))];
+  const sc = 1.6, flip = (e.face || 1) < 0;
+  const img = e.flash > 0 ? (flip ? s.flipWhite : s.white) : (flip ? s.flip : s.img);
+  c.drawImage(img, Math.round(x - s.w * sc / 2), Math.round(y + e.r - s.h * sc), s.w * sc, s.h * sc);
+};

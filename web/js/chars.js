@@ -250,7 +250,7 @@ const WEAPONS = {
       w.n = (w.n || 0) + 1;
       const dmg = 12 * lvMul(w, 0.15);
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      G.recoilT = 0.08;
+      G.recoilT = 0.08; G.fx.push({ k: 'shell', x: p.x, y: p.y - 4, vx: -p.fx * 40 + rnd(-10, 10), vy: -70, life: 0.5, max: 0.5 });
       const coin = G.coins.find(c => c.life > 0 && d2(c.x, c.y, p.x, p.y) < 170 * 170);
       if (coin) {
         coin.life = 0;
@@ -312,7 +312,7 @@ const WEAPONS = {
           onEnd: pr => { aoe(pr.x, pr.y, 46 * big * G.s.area, 32 * lvMul(w, 0.15), { kb: 160, src: 'shotgun' }, '#ff8a2a'); fxParticles(pr.x, pr.y, '#ffb36a', 14, 120, 0.4); sfx('boom'); },
           onHit: pr => { pr.life = 0; } });
       }
-      sfx('shot'); G.recoilT = 0.14;
+      sfx('shot'); G.recoilT = 0.14; for (let i = 0; i < 2; i++) G.fx.push({ k: 'shell', x: p.x, y: p.y - 4, vx: -p.fx * 40 + rnd(-20, 20), vy: -80, life: 0.5, max: 0.5 });
       setCd(w, 1.25 * G.s.cd * (w.lvl >= 7 ? 0.9 : 1));
     },
   },

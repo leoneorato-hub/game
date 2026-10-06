@@ -243,6 +243,7 @@ function update(dt) {
   updateTeles(dt);
   updateEvent(dt);
   updateAmbient(dt);
+  G.idleBark = (G.idleBark ?? 40) - dt; if (G.idleBark <= 0) { G.idleBark = 38 + rnd(20); if (!G.bark) bark('idle'); }
 
   if (G.unravel) {
     G.unravel.t -= dt;
@@ -278,8 +279,9 @@ function update(dt) {
     if (G.winT <= 0 && !G.afterWin) {
       G.afterWin = true;
       const T = BOSS_TALK[G.bossE.type];
-      const lines = T && T.defeat ? expand(T.defeat) : [];
+      const lines = bossDefeatLines(G.bossE.type);
       const fin = G.stage.id === 'finale' && G.mode === 'story' ? ENDINGS[G.char.id] : [];
+      bark('boss');
       startDialog([...lines, ...fin], () => endRun(true));
     }
   }
@@ -406,7 +408,7 @@ function frame(now) {
     else if (MODE === 'dialog') updateDialog(dt);
     else if (MODE === 'cine') {
       G.cine.t -= dt;
-      if (G.cine.t <= 0) { const r = G.cine.rule; G.cine = null; MODE = 'play'; banner('RICUCITURA: ' + r.into.toUpperCase(), r.desc, 2.4, '#ffd23f'); }
+      if (G.cine.t <= 0) { const r = G.cine.rule; G.cine = null; MODE = 'play'; banner('RICUCITURA: ' + r.into.toUpperCase(), r.desc, 2.4, '#ffd23f'); bark('evo'); }
     }
   }
   render(ctx);
