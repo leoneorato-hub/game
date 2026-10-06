@@ -4,6 +4,8 @@
 // =============================================================================
 
 function setCd(w, v) { w.t = v; w.cdMax = v; }
+// Posa dell'arma impugnata (mostra visivamente ogni attacco)
+function pose(tpl, col, ang, mode = 'swing', dur = 0.16, sc = 1) { G.p.atk = { tpl, col, ang, mode, t: dur, dur, sc }; }
 function tick(w, dt) { w.t -= dt; return w.t <= 0; }
 
 // --- Passivi universali (GDD §3.9) ------------------------------------------------
@@ -110,7 +112,7 @@ const TIERS = [
   { n: 'Rame', c: '#c87533' }, { n: 'Ferro', c: '#a8a8b0' }, { n: 'Argento', c: '#d8dde6' }, { n: 'Oro', c: '#f2c230' },
   { n: 'Demonite', c: '#8a6ae0' }, { n: 'Pietra Infernale', c: '#ff6a2a' }, { n: 'Consacrato', c: '#ffe680' }, { n: 'Luminite', c: '#5ff0c0' },
 ];
-const tierMul = w => 1 + 0.22 * (w.lvl - 1);
+const tierMul = w => 1 + 0.18 * (w.lvl - 1);
 
 // =============================================================================
 // ARMI
@@ -133,13 +135,14 @@ const WEAPONS = {
       const e = nearest(p.x, p.y, reach + 4);
       if (!e) { w.t = 0.05; return; }
       const [dx, dy] = cardinal(e.x - p.x, e.y - p.y);
-      const dmg = (w.evo ? 21 : NAIL_DMG[w.lvl - 1]) * 2.4;
+      const dmg = (w.evo ? 21 : NAIL_DMG[w.lvl - 1]) * 2.0;
       const hits = arcHit(p.x, p.y, dx, dy, reach, 1.0, dmg, { kb: 150, src: 'nail' });
       if (hits.length) {
         addSoul(Math.min(3, hits.length) * (11 + (owned('soulcatcher') ? 3 : 0)));
         p.rx -= dx * 50; p.ry -= dy * 50;
       }
       fxArc(p.x, p.y, Math.atan2(dy, dx), 1.0, reach * 0.85, w.evo ? '#fffbe0' : '#ffffff', 0.12, 3);
+      pose('sword', w.evo ? '#fffbe0' : '#e8e4dc', Math.atan2(dy, dx), 'swing', 0.14);
       if (owned('elegy') && p.hp >= p.maxHp) {
         shoot({ x: p.x, y: p.y, vx: dx * 260, vy: dy * 260, r: 5, dmg: dmg * 0.5, pierce: 4, life: 0.6, kind: 'beam', col: '#ffe680', src: 'nail' });
       }
@@ -158,7 +161,8 @@ const WEAPONS = {
       if (!dir) { w.t = 0.15; return; }
       addSoul(-33);
       const sh = owned('shaman') ? 1.33 : 1;
-      const dmg = 15 * 2.4 * lvMul(w, 0.15) * sh * (w.evo ? 2 : 1);
+      const dmg = 15 * 2.0 * lvMul(w, 0.15) * sh * (w.evo ? 2 : 1);
+      p.castT = 0.3;
       const r = 7 * sh * (w.lvl >= 3 ? 1.2 : 1) * (w.evo ? 1.4 : 1) * G.s.area;
       const sp = 230 * (w.lvl >= 7 ? 1.2 : 1);
       const dirs = w.lvl >= 5 ? [dir, [-dir[0], -dir[1]]] : [dir];
@@ -177,7 +181,7 @@ const WEAPONS = {
       let n = 0; GRID.query(p.x, p.y, r * 0.8, () => n++);
       if (n < 6 || !canSpend(33)) { w.t = 0.2; return; }
       addSoul(-33);
-      const dmg = 30 * 2.4 * lvMul(w, 0.15);
+      const dmg = 30 * 2.0 * lvMul(w, 0.15);
       aoe(p.x, p.y, r, dmg, { kb: 220, stun: w.lvl >= 5 ? 1 : 0.5 }, '#f2efe6');
       if (w.lvl >= 8) setTimeout(() => { if (G && MODE === 'play') aoe(G.p.x, G.p.y, r * 1.4, dmg * 0.5, { kb: 160 }, '#9aa6b8'); }, 200);
       fxParticles(p.x, p.y, '#f2efe6', 16, 120, 0.4);
@@ -203,7 +207,7 @@ const WEAPONS = {
         s.x += nx * sp * dt; s.y += ny * sp * dt;
         s.fx = nx;
         if (s.tg && s.cd <= 0 && d2(s.x, s.y, s.tg.x, s.tg.y) < (s.tg.r + 4) ** 2) {
-          hurtEnemy(s.tg, 6 * 2.4 * lvMul(w, 0.12), { silent: true, src: 'weaver' });
+          hurtEnemy(s.tg, 6 * 2.0 * lvMul(w, 0.12), { silent: true, src: 'weaver' });
           if (owned('grubsong')) addSoul(3);
           s.cd = 0.4;
         }
@@ -221,7 +225,7 @@ const WEAPONS = {
         if (w.st <= 0) {
           w.st = 0.12;
           const r = 42 * G.s.area * (w.lvl >= 3 ? 1.15 : 1) * (w.lvl >= 7 ? 1.15 : 1);
-          aoe(p.x, p.y, r, 9 * 2.4 * lvMul(w, 0.15), { kb: 60, src: 'cyclone' }, null);
+          aoe(p.x, p.y, r, 9 * 2.0 * lvMul(w, 0.15), { kb: 60, src: 'cyclone' }, null);
           fxArc(p.x, p.y, rnd(TAU), 1.4, r * 0.9, '#ffffff', 0.12, 2);
         }
         return;
@@ -236,7 +240,7 @@ const WEAPONS = {
 
   // ------------------------------------------------------------------ V1
   revolver: {
-    name: 'Revolver Perforante', icon: ['gun', '#9aa4b8', '#3d6fd6'], max: 8, evoName: 'Marksman Ricoshot',
+    name: 'Revolver Perforante', icon: ['gun', '#9aa4b8', '#3d6fd6'], max: 8, evoName: 'Marksman Ricoshot', gun: true,
     lines: ['Colpo istantaneo; ogni 3° colpo perfora tutta la linea', '+15% danno', '−8% ricarica', '+15% danno', 'Il colpo caricato è più largo', '+15% danno', '−8% ricarica', '+20% danno'],
     update(w, dt) {
       if (!tick(w, dt)) return;
@@ -244,8 +248,9 @@ const WEAPONS = {
       const e = nearest(p.x, p.y, 250);
       if (!e) { w.t = 0.05; return; }
       w.n = (w.n || 0) + 1;
-      const dmg = 13 * lvMul(w, 0.15);
+      const dmg = 12 * lvMul(w, 0.15);
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
+      G.recoilT = 0.08;
       const coin = G.coins.find(c => c.life > 0 && d2(c.x, c.y, p.x, p.y) < 170 * 170);
       if (coin) {
         coin.life = 0;
@@ -286,7 +291,7 @@ const WEAPONS = {
     },
   },
   shotgun: {
-    name: 'Shotgun · Core Eject', icon: ['gun', '#c9a06a', '#5a3a2a'], max: 8,
+    name: 'Shotgun · Core Eject', icon: ['gun', '#c9a06a', '#5a3a2a'], max: 8, gun: true,
     lines: ['Rosa di pallettoni a corto raggio', '+1 pallettone', '+15% danno', 'Ogni 3° colpo espelle un nucleo esplosivo', '+1 pallettone', '+15% danno', '−10% ricarica', 'Nucleo più grande'],
     update(w, dt) {
       if (!tick(w, dt)) return;
@@ -307,12 +312,12 @@ const WEAPONS = {
           onEnd: pr => { aoe(pr.x, pr.y, 46 * big * G.s.area, 32 * lvMul(w, 0.15), { kb: 160, src: 'shotgun' }, '#ff8a2a'); fxParticles(pr.x, pr.y, '#ffb36a', 14, 120, 0.4); sfx('boom'); },
           onHit: pr => { pr.life = 0; } });
       }
-      sfx('shot');
+      sfx('shot'); G.recoilT = 0.14;
       setCd(w, 1.25 * G.s.cd * (w.lvl >= 7 ? 0.9 : 1));
     },
   },
   nailgun: {
-    name: 'Nailgun · Attractor', icon: ['gun', '#7ec8ff', '#22305a'], max: 8,
+    name: 'Nailgun · Attractor', icon: ['gun', '#7ec8ff', '#22305a'], max: 8, gun: true,
     lines: ['Raffica di chiodi; si surriscalda', '+15% danno', '+ capacità prima del surriscaldamento', '+15% danno', 'Attractor: i chiodi curvano verso i nemici', '+15% danno', '+ capacità', '+20% danno'],
     update(w, dt) {
       const p = G.p;
@@ -401,6 +406,7 @@ const WEAPONS = {
       const dmg = (third ? 28 : 18) * lvMul(w, 0.12) * (w.evo ? 1.6 : 1);
       arcHit(p.x, p.y, dx, dy, range, third ? 1.3 : 0.95, dmg, { kb: third ? 220 : 60, src: 'stygius', slot: 'attack' });
       fxArc(p.x, p.y, Math.atan2(dy, dx), third ? 1.3 : 0.95, range * 0.85, w.evo ? '#fff2b0' : '#ff9a5a', 0.13, third ? 4 : 3);
+      pose('sword', w.evo ? '#fff2b0' : '#e2b04a', Math.atan2(dy, dx), 'swing', 0.15, w.evo ? 1.4 : 1.15);
       const fast = w.lvl >= 5 ? 0.85 : 1;
       setCd(w, (third ? 0.55 : 0.27) * G.s.cd * fast * (w.evo ? 1.2 : 1));
     },
@@ -415,6 +421,7 @@ const WEAPONS = {
       if (!n) { w.t = 0.15; return; }
       const r = 50 * G.s.area * (1 + (w.lvl >= 3 ? 0.1 : 0) + (w.lvl >= 6 ? 0.1 : 0));
       aoe(p.x, p.y, r, 24 * lvMul(w, 0.15), { kb: 260, src: 'nova', slot: 'special' }, '#ff9a5a');
+      pose('sword', '#e2b04a', 0, 'spin', 0.3, 1.15);
       shake(2);
       setCd(w, 3.4 * G.s.cd * Math.pow(0.92, Math.floor(w.lvl / 4 + (w.lvl >= 7 ? 1 : 0))));
     },
@@ -583,6 +590,7 @@ const WEAPONS = {
       const dmg = 13 * lvMul(w, 0.12) * (w.evo ? 1.5 : 1);
       arcHit(p.x, p.y, dx, dy, range, 0.9, dmg, { crit: third, kb: third ? 150 : 50, src: 'rusty' });
       fxArc(p.x, p.y, Math.atan2(dy, dx), 0.9, range * 0.85, w.evo ? '#ffd23f' : '#ffb07a', 0.12, third ? 4 : 2);
+      pose('sword', w.evo ? '#ffd23f' : '#c87533', Math.atan2(dy, dx), 'swing', 0.13);
       if (third && w.evo) shoot({ x: p.x, y: p.y, vx: dx * 280, vy: dy * 280, r: 6, dmg: 40, pierce: 99, life: 0.6, kind: 'blade', col: '#ffd23f', src: 'rusty' });
       setCd(w, (third ? 0.5 : 0.3) * G.s.cd * (w.lvl >= 5 ? 0.85 : 1) * (w.evo ? 0.7 : 1));
     },
@@ -723,6 +731,7 @@ const WEAPONS = {
       addFervour(Math.min(3, hits.length) * 3);
       w.side = !w.side;
       fxArc(p.x, p.y, Math.atan2(dy, dx) + (w.side ? 0.2 : -0.2), 1.2, range * 0.85, w.evo ? '#ff8a2a' : '#e2c46a', 0.14, 3);
+      pose('sword', w.evo ? '#ff8a2a' : '#d9b43a', Math.atan2(dy, dx), 'swing', 0.2, 1.5);
       const fast = G.p.tientoT > 0 && owned('tiento') ? 0.6 : 1;
       setCd(w, 0.62 * G.s.cd * (w.lvl >= 4 ? 0.92 : 1) * fast);
     },
@@ -813,6 +822,7 @@ const WEAPONS = {
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
       beamHit(p.x, p.y, dx, dy, range, 4, 10 * tierMul(w), { kb: 40, src: 'shortsword' });
       fxLine(p.x + dx * 6, p.y + dy * 6, p.x + dx * range, p.y + dy * range, TIERS[w.lvl - 1].c, 0.08, 2);
+      pose('sword', TIERS[w.lvl - 1].c, Math.atan2(dy, dx), 'stab', 0.12);
       setCd(w, 0.26 * G.s.cd * (1 - 0.03 * w.lvl));
     },
     draw(w, c) { if (w.evo) zenithDraw(w, c); },
@@ -880,6 +890,7 @@ const WEAPONS = {
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
       const hits = arcHit(p.x, p.y, dx, dy, range, 1.0, 20 * tierMul(w), { kb: 60, src: 'beekeeper' });
       fxArc(p.x, p.y, Math.atan2(dy, dx), 1.0, range * 0.85, '#ffd23f', 0.12, 3);
+      pose('bee', TIERS[w.lvl - 1].c, Math.atan2(dy, dx), 'over', 0.25, 1.2);
       if (hits.length) for (let i = 0; i < 1 + Math.floor(w.lvl / 3); i++) {
         const a = rnd(TAU);
         shoot({ x: p.x, y: p.y, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, r: 2, dmg: 5 * tierMul(w), life: 2, kind: 'bee', homing: 6, src: 'beekeeper' });
@@ -929,7 +940,7 @@ function madelineDash(dx, dy) {
   const w = getW('dash');
   [dx, dy] = norm(dx, dy);
   p.charges--;
-  p.dash = { t: 0.15, dx, dy, sp: 440 * (1 + 0.15 * ((w.lvl >= 4) + (w.lvl >= 7))), hit: new Set(), dmg: 26 * lvMul(w, 0.15) * (w.lvl >= 8 ? 1.25 : 1) };
+  p.dash = { t: 0.15, dx, dy, sp: 440 * (1 + 0.15 * ((w.lvl >= 4) + (w.lvl >= 7))), hit: new Set(), dmg: 22 * lvMul(w, 0.15) * (w.lvl >= 8 ? 1.25 : 1) };
   p.invuln = Math.max(p.invuln, 0.2);
   G.hist.push({ x: p.x, y: p.y, t: G.t, dash: true, fl: dx < 0 });
   fxParticles(p.x, p.y, '#ffffff', 6, 60, 0.25);
@@ -968,6 +979,7 @@ function castPrayer(w) {
   w.flash = 0.6;
   fxText(G.p.x, G.p.y - 22, WEAPONS[w.id].name.split(' ')[0].toUpperCase(), '#e2c46a', 0.9);
   fxRing(G.p.x, G.p.y, 4, 26, '#e2c46a', 0.35);
+  G.p.castT = 0.5; G.p.castCol = '#e2c46a';
 }
 
 function zenithUpdate(w, dt) {
@@ -1007,7 +1019,7 @@ function isaacStats() {
   const b = G.p.ist;
   s.dmg += b.dmg; s.tears += b.tears; s.range += b.range; s.shot += b.shot; s.speed += b.speed; s.luck += b.luck;
   for (const it of G.passives) if (ISAAC_ITEMS[it.id]) ISAAC_ITEMS[it.id].apply(s);
-  s.realDmg = s.dmg * s.dmgMul * 3;
+  s.realDmg = s.dmg * s.dmgMul * 2.6;
   s.realTears = s.tears * s.tearsMul;
   return s;
 }
@@ -1391,7 +1403,7 @@ function buildOptions(n = 3, forChest = false) {
     if (w) { if (!w.evo && w.lvl < d.max) pool.push({ kind: 'weapon', id, wt: 1.5 }); }
     else if (G.weapons.length < c.maxW) pool.push({ kind: 'weapon', id, wt: 1 });
   }
-  const pcount = G.passives.filter(p => !PASSIVES[p.id].isaac).length;
+  const pcount = G.passives.filter(p => !PASSIVES[p.id].isaac && !PASSIVES[p.id].relic).length;
   for (const id of c.passives) {
     const d = PASSIVES[id];
     if (d.cond && !d.cond()) continue;
@@ -1400,6 +1412,7 @@ function buildOptions(n = 3, forChest = false) {
     else if (d.isaac || pcount < c.maxP) pool.push({ kind: 'passive', id, wt: EVOS.some(r => r.char === c.id && r.req.includes(id) && getW(r.w)) ? 1.6 : 0.9 });
   }
   for (const id of c.charms || []) if (!getP(id)) pool.push({ kind: 'charm', id, wt: 0.9 });
+  if (G.level >= 4) for (const id of Object.keys(RELICS)) if (!getP(id)) pool.push({ kind: 'passive', id, wt: 0.12 });
   if (c.boons) {
     const slots = ['attack', getW('nova') && 'special', getW('bloodstone') && 'cast'].filter(Boolean);
     const gods = Object.keys(GODS).sort(() => Math.random() - 0.5).slice(0, 3);
@@ -1432,7 +1445,7 @@ function buildOptions(n = 3, forChest = false) {
 function synergiesFor(id) {
   const c = G.char.id;
   const res = [];
-  for (const s of SYN) if (s.char === c) {
+  for (const s of SYN) if (s.char === c || s.char === '*') {
     if (s.a === id && owned(s.b)) res.push(s.name);
     else if (s.b === id && owned(s.a)) res.push(s.name);
   }
@@ -1464,7 +1477,7 @@ function describeOption(o) {
     const evoRule = EVOS.find(r => r.char === G.char.id && r.req.includes(o.id));
     const evo = evoRule && getW(evoRule.w)?.lvl >= WEAPONS[evoRule.w].max && evoRule.req.every(q => q === o.id || owned(q));
     return { ...o, name: d.name, line: d.line(lvl + 1), lvl, max: d.max, isNew: !p, icon: d.icon, syn: synergiesFor(o.id), evo, warn,
-      tag: o.kind === 'charm' ? 'AMULETO · ' + d.charm + ' TACCHE' : d.isaac ? 'OGGETTO' : p ? 'LV ' + lvl + ' → ' + (lvl + 1) : 'NUOVO PASSIVO' };
+      tag: o.kind === 'charm' ? 'AMULETO · ' + d.charm + ' TACCHE' : d.relic ? 'RELIQUIA DEL MULTIVERSO' : d.isaac ? 'OGGETTO' : p ? 'LV ' + lvl + ' → ' + (lvl + 1) : 'NUOVO PASSIVO' };
   }
   if (o.kind === 'boon') {
     const g = GODS[o.god], cur = G.boons[o.slot];

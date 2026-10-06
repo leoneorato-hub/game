@@ -159,7 +159,10 @@ function sfx(name) {
 // --- Statistiche --------------------------------------------------------------------
 function recalc() {
   const c = G.char, p = G.p;
-  const s = { might: 1, area: 1, cd: 1, speed: 1, magnet: 1, luck: 1, growth: 1, duration: 1, armor: c.armor || 0, hpMul: 1, hpAdd: 0, units: 0, anxMul: 1 };
+  const s = { might: 0.9, area: 1, cd: 1, speed: 1, magnet: 1, luck: 1, growth: 1, duration: 1, armor: c.armor || 0, hpMul: 1, hpAdd: 0, units: 0, anxMul: 1 };
+  const U = (typeof META !== 'undefined' && META.up) || {};
+  s.hpMul += 0.05 * (U.hp || 0); s.units += Math.floor((U.hp || 0) / 2); s.might += 0.04 * (U.might || 0); s.magnet += 0.15 * (U.magnet || 0);
+  s.speed += 0.03 * (U.speed || 0); s.growth += 0.05 * (U.growth || 0); s.luck += 0.06 * (U.luck || 0);
   for (const it of G.passives) PASSIVES[it.id].stat?.(s, it.lvl);
   for (const it of G.charms) PASSIVES[it.id].stat?.(s, it.lvl);
   c.stats?.(s);
@@ -181,13 +184,15 @@ function hurtEnemy(e, dmg, o = {}) {
   G.char.preHit?.(e, o);
   if (o.mul) d *= o.mul;
   let crit = !!o.crit;
+  if (owned('frost')) o.critChance = (o.critChance || 0) + 0.08;
   if (!crit && o.critChance && Math.random() < o.critChance) crit = true;
   if (crit) d *= o.critMul || 2;
   if (e.takeMul !== undefined) d *= e.takeMul;
   if (e.guard) d *= e.guard(e, o);
   if (e.bunkerT > 0) d *= 1.3;
   e.hp -= d;
-  e.flash = 0.07;
+  e.flash = 0.07; e.pop = 0.12;
+  if (crit && owned('frost') && !e.boss) e.freezeT = Math.max(e.freezeT, 1);
   if (o.kb && !e.boss) {
     const k = o.kb * (1 - (e.kbRes || 0));
     e.kx += (o.kx || 0) * k; e.ky += (o.ky || 0) * k;
@@ -199,6 +204,8 @@ function hurtEnemy(e, dmg, o = {}) {
   G.dmgDealt += d;
   e.onDamaged?.(e, d);
   G.char.postHit?.(e, d, o);
+  if (G.passives.length && !o.relicEcho) relicOnHit(e, d, o);
+  if (e.linkT > 0) e.linkT -= 0.01;
   if (SET.dmgNums || crit) fxText(e.x + rnd(-4, 4), e.y - e.r - 4, crit ? Math.round(d) + '!' : Math.round(d), crit ? '#ffd23f' : '#fff', 0.5);
   if (!o.silent) sfx('hit');
   if (e.hp <= 0) killEnemy(e, o);
@@ -219,6 +226,7 @@ function killEnemy(e, o = {}) {
   }
   if (e.elite && !e.boss) { dropPickup('chest', e.x, e.y); G.elitesKilled++; }
   e.onDeath?.(e);
+  relicOnKill(e);
   G.char.onKill?.(e, o);
   if (e.boss) G.stage.onBossDeath?.(e);
 }
@@ -253,6 +261,8 @@ function hurtPlayer(amount, src) {
   }
   p.invuln = G.char.iframes || 0.6;
   G.hitT = 0;
+  eventHurt();
+  G.hurtFlash = 0.15;
   shake(3);
   sfx('hurt');
   fxParticles(p.x, p.y, '#ff4a5a', 8, 80, 0.3);
@@ -277,10 +287,10 @@ function killPlayer() {
 // --- Nemici ---------------------------------------------------------------------------
 function spawnEnemy(type, x, y, extra = {}) {
   const T = ETYPES[type];
-  const sc = 1 + G.t / 110 + G.nodes * 0.15;
+  const sc = 1 + G.t / 240 + G.nodes * 0.15;
   const e = {
     type, x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: T.r, spr: T.spr,
-    hp: T.hp * (T.boss ? 1 : sc), maxHp: 0, spd: T.spd * (1 + Math.min(0.35, G.t / 1200)), dmg: T.dmg * (1 + G.t / 500),
+    hp: T.hp * (T.boss ? 1 : sc), maxHp: 0, spd: T.spd * (1 + Math.min(0.3, G.t / 1400)) * (owned('pact') ? 1.15 : 1), dmg: T.dmg * 0.8 * (1 + G.t / 700),
     xp: T.xp, elite: !!T.elite, boss: !!T.boss, kbRes: T.kbRes || (T.elite ? 0.8 : 0), blood: T.blood,
     flash: 0, stun: 0, slow: 0, slowT: 0, freezeT: 0, burnT: 0, burnD: 0, doomT: 0, chill: 0, weakT: 0, t: 0,
     ai: T.ai || AI.chase, draw: T.draw, hitT: 0, ...extra,
@@ -397,7 +407,14 @@ function updateProjs(dt) {
         const [kx, ky] = norm(pr.vx, pr.vy);
         hurtEnemy(e, pr.dmg, { kx, ky, kb: pr.kb || 40, src: pr.src, crit: pr.crit, critChance: pr.critChance, freeze: pr.freeze, burn: pr.burn, stun: pr.stun });
         pr.onHit?.(pr, e);
-        if (pr.pierce-- <= 0) pr.dead = true;
+        if (pr.pierce-- <= 0) {
+          if (owned('cmirror') && !pr.bounced && !pr.noHit) {
+            pr.bounced = true; pr.pierce = 0;
+            const n = nearest(pr.x, pr.y, 120, x => !pr.hit.has(x));
+            if (n) { const sp = Math.hypot(pr.vx, pr.vy) || 200; const [nx, ny] = norm(n.x - pr.x, n.y - pr.y); pr.vx = nx * sp; pr.vy = ny * sp; pr.life = Math.max(pr.life, 0.5); if (owned('frost')) pr.freeze = 1; }
+            else pr.dead = true;
+          } else pr.dead = true;
+        }
       });
     }
     if (pr.life <= 0 && !pr.dead) { pr.dead = true; pr.onEnd?.(pr); }
@@ -452,6 +469,7 @@ function chainLightning(x, y, n, range, dmg, o = {}, exclude) {
 
 // --- Proiettili nemici -----------------------------------------------------------------
 function eShoot(x, y, ang, spd, dmg, o = {}) {
+  if (!o.force && G.eprojs.length > 70) return;
   G.eprojs.push(Object.assign({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r: 3, dmg, life: 4, col: '#ff5a6a', kind: 'orb' }, o));
 }
 function updateEProjs(dt) {
@@ -459,6 +477,11 @@ function updateEProjs(dt) {
   for (const b of G.eprojs) {
     if (b.dead) continue;
     b.life -= dt;
+    if (b.homing) {
+      const sp = Math.hypot(b.vx, b.vy);
+      const [nx, ny] = norm(p.x - b.x, p.y - b.y);
+      b.vx += (nx * sp - b.vx) * Math.min(1, b.homing * dt); b.vy += (ny * sp - b.vy) * Math.min(1, b.homing * dt);
+    }
     b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.life <= 0) { b.dead = true; continue; }
     for (const bl of G.blocks) if (d2(b.x, b.y, bl.x, bl.y) < 49) { b.dead = true; bl.hp -= 10; }
@@ -478,11 +501,11 @@ function dropGem(x, y, v) {
 }
 function dropPickup(kind, x, y, extra = {}) { G.pickups.push(Object.assign({ kind, x, y, t: 0 }, extra)); }
 
-function xpNeed(n) { return 5 + 6 * n + 0.32 * n * n; }
+function xpNeed(n) { return 6 + 8 * n + 0.45 * n * n; }
 
 function updateGems(dt) {
   const p = G.p;
-  const mag = 40 * G.s.magnet;
+  const mag = 50 * G.s.magnet;
   for (const g of G.gems) {
     if (g.dead) continue;
     const dd = d2(g.x, g.y, p.x, p.y);
@@ -494,8 +517,8 @@ function updateGems(dt) {
       g.x += g.vx * dt; g.y += g.vy * dt;
       if (dd < 64) {
         g.dead = true;
-        G.thread += g.v * 0.15;
-        G.xp += g.v * G.s.growth * (G.char.xpMul ? G.char.xpMul() : 1) * (G.xpEventMul || 1);
+        G.thread += g.v * 0.15; G.gemsTaken = (G.gemsTaken || 0) + 1;
+        G.xp += g.v * G.s.growth * (G.char.xpMul ? G.char.xpMul() : 1) * (G.xpEventMul || 1) * (owned('pact') && owned('collector') ? 1.15 : 1);
         sfx('pick');
       }
     }
@@ -550,6 +573,7 @@ function evoReady(rule) {
 function openChest() {
   const rule = EVOS.find(r => r.char === G.char.id && evoReady(r));
   if (rule) { startEvolution(rule); return; }
+  if (Math.random() < 0.22 && relicChoices(1).length) { offerRelic(); return; }
   const n = Math.random() < 0.15 * G.s.luck ? 3 : 1;
   const got = [];
   for (let i = 0; i < n; i++) {
@@ -589,6 +613,9 @@ function endRun(win, reason) {
   G.win = win;
   G.reason = reason;
   MODE = 'end';
+  META.thread += Math.floor(G.thread);
+  if (win && G.mode === 'story') { META.beaten[G.stage.id] = true; if (G.stage.id === 'finale') META.storyDone[G.char.id] = true; }
+  saveMeta();
   if (win) {
     try {
       const best = JSON.parse(localStorage.getItem('pe_best') || '{}');

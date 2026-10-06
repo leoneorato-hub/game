@@ -169,11 +169,89 @@ body.touch #touch-ui { display: block; }
 body.in-menu #touch-ui { display: none; }
 .rotate-hint { display: none; }
 @media (orientation: portrait) and (pointer: coarse) { .rotate-hint { display: block; color: var(--gold); font-size: 14px; } }
+
+/* ---- Alfa 2 ---- */
+.gold { color: var(--gold); }
+#splash { position: absolute; right: -10px; top: 48px; transform: rotate(-12deg); color: var(--gold); font-family: var(--display); font-size: clamp(10px, 1.6vw, 14px); text-shadow: 2px 2px 0 var(--ink); animation: splash 0.8s ease-in-out infinite alternate; white-space: nowrap; }
+@keyframes splash { to { transform: rotate(-12deg) scale(1.08); } }
+.logo-wrap { position: relative; }
+.logo span { display: inline-block; animation: stitch-in .9s steps(9) both; }
+@keyframes stitch-in { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+#title-progress { font-size: 14px; color: var(--thread); }
+#title-tip, #pause-tip { font-size: 14px; color: var(--muted); font-style: italic; max-width: 60ch; }
+
+.char-card canvas { width: 48px; height: 56px; image-rendering: pixelated; }
+.char-card { transition: transform .12s; }
+.char-card:hover, .char-card:focus-visible { transform: translateY(-3px); }
+.char-card.pop { animation: pop .28s ease-out; }
+@keyframes pop { 40% { transform: translateY(-6px) scale(1.06); } }
+.char-done { position: absolute; top: 3px; right: 6px; color: var(--gold); font-size: 12px; }
+.portrait-box { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 520px) { .portrait-box { grid-template-columns: 1fr; } }
+#char-portrait { width: 160px; height: 160px; image-rendering: pixelated; border: 2px solid var(--ink); outline: 1px dashed var(--thread); outline-offset: -6px; }
+.voice-box { margin-top: 8px; border-left: 3px solid var(--vc, var(--thread)); background: rgba(0,0,0,.3); padding: 8px 10px; min-height: 3.2em; }
+.voice-box b { font-family: var(--display); font-size: 11px; color: var(--vc, var(--thread)); display: block; margin-bottom: 2px; }
+#char-voice, #shop-voice { --vc: var(--paper); }
+
+#story-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.quilt-patch { background: var(--cloth); border: 2px solid var(--ink); padding: 0; text-align: left; display: grid; grid-template-rows: auto 1fr; animation: slide-in .3s ease-out both; animation-delay: calc(var(--i) * 0.04s); transition: transform .12s; }
+.quilt-patch .thumb { display: block; aspect-ratio: 16 / 9; background-size: cover; image-rendering: pixelated; border-bottom: 2px dashed var(--thread); }
+.quilt-patch:hover, .quilt-patch:focus-visible { transform: translateY(-3px) rotate(-.5deg); outline: 1px dashed var(--gold); outline-offset: -5px; background: var(--cloth-2); }
+.quilt-patch.done { box-shadow: inset 0 0 0 2px rgba(255,210,63,.35); }
+.qp-body { display: grid; gap: 4px; padding: 10px 12px 12px; }
+
+#s-shop .shop-head { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 14px; align-items: center; margin-bottom: 14px; }
+#shop-portrait { width: 96px; height: 96px; image-rendering: pixelated; border: 2px solid var(--ink); }
+#shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.shop-item { background: var(--cloth); border: 2px solid var(--ink); padding: 12px; display: grid; justify-items: center; gap: 5px; text-align: center; transition: transform .12s; }
+.shop-item:hover:not(:disabled), .shop-item:focus-visible { transform: translateY(-3px); outline: 1px dashed var(--gold); outline-offset: -5px; }
+.shop-item img { width: 40px; image-rendering: pixelated; }
+.si-name { font-family: var(--display); font-size: 12px; }
+.si-line { font-size: 14px; }
+.si-cost { font-family: var(--display); font-size: 11px; color: var(--gold); }
+.shop-item:disabled { opacity: .5; cursor: default; }
+.shop-item.maxed .si-cost { color: var(--muted); }
+
+.lv-card.relic { border-color: #8a6a1a; box-shadow: 0 4px 0 var(--ink), inset 0 0 0 1px rgba(255,210,63,.4); }
+.lv-card.evo { animation: slide-in .25s ease-out both, glow 1s ease-in-out infinite alternate; }
+@keyframes glow { to { box-shadow: 0 4px 0 var(--ink), 0 0 18px rgba(255,210,63,.55); } }
+.lv-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.12) 45%, transparent 60%); transform: translateX(-120%); pointer-events: none; }
+.lv-card:hover::after, .lv-card:focus-visible::after { transform: translateX(120%); transition: transform .6s; }
+.lv-card.chosen { animation: chosen .18s ease-in forwards; }
+@keyframes chosen { to { transform: scale(.85) translateY(-30px); opacity: 0; } }
+.lv-card img { transition: transform .2s; }
+.lv-card:hover img, .lv-card:focus-visible img { transform: scale(1.15) rotate(-6deg); }
+#s-choice { display: grid; gap: 14px; }
+#ch-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 240px)); gap: 12px; justify-content: center; }
+
+#end-receipt { background: #efe6d2; color: #1a1220; font-family: "Courier New", monospace; font-size: 14px; width: min(360px, 100%); padding: 16px 18px 20px; box-shadow: 0 6px 0 rgba(0,0,0,.4); position: relative; animation: print .7s steps(14) both;
+  -webkit-mask: radial-gradient(circle 5px at 50% 100%, transparent 98%, #000) 0 0 / 12px 100% repeat-x; mask: radial-gradient(circle 5px at 50% 100%, transparent 98%, #000) 0 0 / 12px 100% repeat-x; }
+@keyframes print { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+.rc-head { text-align: center; font-weight: 700; margin-bottom: 8px; }
+.rc-row { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+.rc-row.muted { color: #6a5a4a; }
+.rc-sep { border-top: 1px dashed #6a5a4a; margin: 6px 0; }
+.rc-foot { text-align: center; margin-top: 10px; font-size: 12px; }
+
+/* Dialoghi */
+#dlg { position: absolute; left: 50%; bottom: max(14px, 3vh); transform: translateX(-50%); width: min(820px, calc(100% - 32px)); z-index: 8; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: stretch; background: rgba(20,14,24,.96); border: 2px solid var(--ink); outline: 1px dashed var(--vc, var(--thread)); outline-offset: -6px; padding: 12px; cursor: pointer; animation: slide-in .2s ease-out; }
+#dlg.right { grid-template-columns: minmax(0, 1fr) 96px; }
+#dlg.right #dlg-portrait { order: 2; }
+#dlg-portrait { width: 96px; height: 96px; image-rendering: pixelated; border: 2px solid var(--ink); background: #1a1220; }
+#dlg-name { font-family: var(--display); font-size: 13px; color: var(--vc, var(--thread)); margin-bottom: 6px; display: block; }
+#dlg-text { font-size: 18px; line-height: 1.45; min-height: 3em; }
+#dlg-text.action { font-style: italic; color: var(--muted); }
+#dlg-hint { font-size: 12px; color: var(--muted); text-align: right; margin-top: 6px; }
+@media (max-width: 520px) { #dlg { grid-template-columns: 64px minmax(0,1fr); } #dlg.right { grid-template-columns: minmax(0,1fr) 64px; } #dlg-portrait { width: 64px; height: 64px; } #dlg-text { font-size: 15px; } }
 </style>
 
 <div id="app">
   <div id="stage-wrap">
     <canvas id="cv" width="640" height="360" aria-label="Schermo di gioco"></canvas>
+    <div id="dlg" hidden role="dialog" aria-live="polite">
+      <canvas id="dlg-portrait" width="96" height="96"></canvas>
+      <div><span id="dlg-name"></span><p id="dlg-text"></p><p id="dlg-hint">SPAZIO / INVIO / clic per continuare · ESC per saltare</p></div>
+    </div>
   </div>
   <div id="touch-ui">
     <button id="t-ability" type="button" aria-label="Abilità">ABILITÀ</button>
@@ -183,36 +261,62 @@ body.in-menu #touch-ui { display: none; }
   <div id="ui">
     <!-- TITOLO -->
     <section id="s-title" class="screen" hidden>
-      <h1 class="logo">PATCHWORK<br><span>ETERNITY</span></h1>
-      <p class="sub">Survivors of the Stitched Multiverse · Alfa 0.1</p>
+      <div class="logo-wrap"><h1 class="logo"><span>PATCHWORK</span><br><span style="color:var(--thread)">ETERNITY</span></h1><span id="splash"></span></div>
+      <p class="sub">Survivors of the Stitched Multiverse · Alfa 0.2</p>
       <div class="title-menu">
-        <button id="b-play" class="btn primary nav" type="button"><span class="spool"></span>Gioca</button>
+        <button id="b-story" class="btn primary nav" type="button"><span class="spool"></span>Storia: la Scala dei Finali</button>
+        <button id="b-extra" class="btn nav" type="button"><span class="spool"></span>Toppe Extra</button>
+        <button id="b-shop" class="btn nav" type="button"><span class="spool"></span>Merceria di Sor Ditale</button>
         <button id="b-controls" class="btn nav" type="button"><span class="spool"></span>Comandi</button>
         <button id="b-options" class="btn nav" type="button"><span class="spool"></span>Opzioni</button>
       </div>
-      <p class="how">Ti muovi tu, le armi attaccano da sole. Raccogli i frammenti, scegli i potenziamenti, sopravvivi fino al boss del minuto 6.</p>
+      <p id="title-progress"></p>
+      <p id="title-tip"></p>
       <p class="rotate-hint">Ruota il telefono in orizzontale per giocare meglio.</p>
       <p class="foot">Concept fan-made non ufficiale. Personaggi e mondi appartengono ai rispettivi autori: Team Cherry, New Blood / Arsi Patala, Supergiant Games, Maddy Makes Games, Motion Twin / Evil Empire, The Game Kitchen, Re-Logic, Edmund McMillen.</p>
     </section>
 
     <!-- PERSONAGGI -->
     <section id="s-chars" class="screen patch" hidden>
-      <div class="head-row"><h2>Scegli chi ricucire</h2><span class="muted">Frecce o 1–8 per scegliere · INVIO per continuare · ESC per tornare</span></div>
+      <div class="head-row"><h2 id="chars-title">Scegli chi ricucire</h2><span class="muted">Frecce o 1–8 · INVIO per confermare · ESC per tornare</span></div>
       <div class="sel-layout">
         <div id="char-grid"></div>
-        <div id="char-detail"></div>
+        <div id="char-detail">
+          <div class="portrait-box">
+            <canvas id="char-portrait" width="160" height="160"></canvas>
+            <div><div id="char-detail-body"></div>
+              <div class="voice-box"><b id="char-voice-name"></b><span id="char-voice"></span></div></div>
+          </div>
+        </div>
       </div>
       <div class="row" style="margin-top:16px;justify-content:space-between">
-        <button class="btn nav" type="button" onclick="UI.show('s-title')">← Indietro</button>
-        <button class="btn primary nav" type="button" onclick="UI.openStages()">Scegli lo stage →</button>
+        <button class="btn nav" type="button" onclick="UI.openTitle()">← Indietro</button>
+        <button id="b-chars-next" class="btn primary nav" type="button" onclick="UI.confirmChar()">Avanti →</button>
       </div>
     </section>
 
-    <!-- STAGE -->
+    <!-- STORIA -->
+    <section id="s-story" class="screen patch" hidden>
+      <div class="head-row"><h2>La Scala dei Finali</h2><span class="muted">Con <b id="story-who"></b> · ogni capitolo: mini-boss a 2:30, boss finale a 5:00</span></div>
+      <p class="muted" style="margin-bottom:12px">Alfa: tutti i capitoli sono aperti. I capitoli ricuciti restano segnati con ✓. Battere la Cucitrice nel Finale mostra il finale del personaggio.</p>
+      <div id="story-list"></div>
+      <div class="row" style="margin-top:16px"><button class="btn nav" type="button" onclick="UI.openChars()">← Personaggi</button></div>
+    </section>
+
+    <!-- TOPPE EXTRA -->
     <section id="s-stages" class="screen patch" hidden>
-      <div class="head-row"><h2>Scegli lo stage</h2><span class="muted">Con <b id="stage-who"></b> · run alfa: boss al minuto 6, IL CONTINUE al minuto 10</span></div>
+      <div class="head-row"><h2>Toppe Extra</h2><span class="muted">Con <b id="stage-who"></b> · boss al minuto 6, IL CONTINUE al minuto 10</span></div>
       <div id="stage-list"></div>
       <div class="row" style="margin-top:16px"><button class="btn nav" type="button" onclick="UI.openChars()">← Personaggi</button></div>
+    </section>
+
+    <!-- MERCERIA -->
+    <section id="s-shop" class="screen patch" hidden>
+      <div class="head-row"><h2>Merceria di Sor Ditale</h2><span class="gold">Filo: <b id="shop-thread"></b></span></div>
+      <div class="shop-head"><canvas id="shop-portrait" width="96" height="96"></canvas><div class="voice-box" style="--vc:#e2b04a"><b>Sor Ditale</b><span id="shop-voice"></span></div></div>
+      <div id="shop-grid"></div>
+      <p class="muted" style="margin-top:12px">Il Filo si guadagna in ogni run, anche perdendo. I potenziamenti valgono per tutti i personaggi.</p>
+      <div class="row" style="margin-top:12px"><button class="btn nav" type="button" onclick="UI.openTitle()">← Indietro</button></div>
     </section>
 
     <!-- COMANDI -->
@@ -224,6 +328,8 @@ body.in-menu #touch-ui { display: none; }
           <tbody>
             <tr><td>Muoviti</td><td><kbd>WASD</kbd> / <kbd>Frecce</kbd></td><td>Levetta sinistra</td><td>Trascina a sinistra</td></tr>
             <tr><td>Abilità del personaggio</td><td><kbd>SPAZIO</kbd></td><td><kbd>A</kbd></td><td>Pulsante ABILITÀ</td></tr>
+            <tr><td>V1: cambia arma</td><td><kbd>Q</kbd></td><td>—</td><td>Automatico</td></tr>
+            <tr><td>Avanza nei dialoghi</td><td><kbd>SPAZIO</kbd> / <kbd>INVIO</kbd> (<kbd>ESC</kbd> salta)</td><td><kbd>A</kbd></td><td>Tocca il riquadro</td></tr>
             <tr><td>Pausa e Mappa delle Trame</td><td><kbd>ESC</kbd> / <kbd>P</kbd> / <kbd>TAB</kbd></td><td><kbd>Start</kbd></td><td>Pulsante II</td></tr>
             <tr><td>Scegli potenziamento</td><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> o frecce + <kbd>INVIO</kbd></td><td>Croce + <kbd>A</kbd></td><td>Tocca la toppa</td></tr>
             <tr><td>Ritira le opzioni</td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td>Pulsante Ritira</td></tr>
@@ -236,12 +342,12 @@ body.in-menu #touch-ui { display: none; }
           <tbody id="ability-table"></tbody>
         </table></div>
       </div>
-      <h3 style="font-size:13px;color:var(--thread);margin:16px 0 8px">Come leggere la HUD</h3>
+      <h3 style="font-size:13px;color:var(--thread);margin:16px 0 8px">Come leggere il gioco</h3>
       <ul style="font-size:15px">
-        <li>In alto: il <b>filo dell'esperienza</b> (l'ago cuce mentre raccogli), il timer e il prossimo evento.</li>
-        <li>In basso a sinistra: l'<b>anello delle armi</b>. L'arco bianco è la ricarica, i puntini sono i livelli. Un filo colorato tra due armi indica una sinergia attiva; un filo dorato pulsante indica una Ricucitura pronta: apri uno Strappo (forziere degli élite).</li>
-        <li>Accanto: la <b>risorsa del personaggio</b> (Maschere e Anima, Stile, Ansia, Fervore…) e il promemoria del tasto abilità.</li>
-        <li>A destra: il <b>pannello del pericolo</b> dello stage (navette, tabellone dei treni, rintocchi).</li>
+        <li><b>Cerchi e linee rosse</b> che si chiudono sono attacchi in arrivo: esci dall'area prima che si riempiano.</li>
+        <li><b>Eventi</b>: il pannello a destra e una freccia dorata indicano l'obiettivo (cerchio da cucire, Rocchetto d'Oro da consegnare, personaggio da incontrare, taglia da prendere).</li>
+        <li>In basso a sinistra: l'<b>anello delle armi</b>. Fili colorati = sinergie attive; filo dorato pulsante = Ricucitura pronta (apri uno Strappo).</li>
+        <li>Le <b>Reliquie del Multiverso</b> (bordo dorato) hanno trucchi che si combinano tra loro.</li>
       </ul>
       <div class="row" style="margin-top:16px"><button id="b-controls-back" class="btn nav" type="button">← Indietro</button></div>
     </section>
@@ -250,7 +356,7 @@ body.in-menu #touch-ui { display: none; }
     <section id="s-options" class="screen patch" hidden>
       <div class="head-row"><h2>Opzioni</h2></div>
       <form id="opt-form">
-        <div class="opt"><label for="opt-vol">Volume effetti</label><span><input id="opt-vol" name="vol" type="range" min="0" max="100" step="5"> <span id="opt-vol-v"></span></span></div>
+        <div class="opt"><label for="opt-vol">Volume (effetti e voci)</label><span><input id="opt-vol" name="vol" type="range" min="0" max="100" step="5"> <span id="opt-vol-v"></span></span></div>
         <div class="opt"><label for="opt-shake">Scuotimento dello schermo</label><input id="opt-shake" name="shake" type="checkbox"></div>
         <div class="opt"><label for="opt-dmg">Numeri di danno</label><input id="opt-dmg" name="dmg" type="checkbox"><small>Spenti di base: con centinaia di nemici sono rumore. I critici si vedono sempre.</small></div>
         <div class="opt"><label for="opt-auto">Abilità automatica</label><input id="opt-auto" name="auto" type="checkbox"><small>Il Focus del Cavaliere e le fiaschette di Prigioniero e Penitente partono da soli quando serve.</small></div>
@@ -273,6 +379,12 @@ body.in-menu #touch-ui { display: none; }
       </div>
     </section>
 
+    <!-- SCELTA (doni e reliquie) -->
+    <section id="s-choice" class="screen" hidden>
+      <div class="lv-head"><h2 id="ch-title" style="color:var(--gold)"></h2><p id="ch-sub" class="muted"></p></div>
+      <div id="ch-cards"></div>
+    </section>
+
     <!-- PAUSA -->
     <section id="s-pause" class="screen patch" hidden>
       <div class="head-row"><h2>Pausa</h2><span class="muted">ESC per riprendere</span></div>
@@ -282,18 +394,18 @@ body.in-menu #touch-ui { display: none; }
         <button id="b-p-options" class="btn nav" type="button">Opzioni</button>
         <button id="b-quit" class="btn nav" type="button">Abbandona la run</button>
       </div>
+      <p id="pause-tip" style="margin-top:12px"></p>
       <div id="pause-map"></div>
     </section>
 
-    <!-- RENDICONTO -->
+    <!-- SCONTRINO -->
     <section id="s-end" class="screen patch" hidden>
       <h2 id="end-title">GAME OVER</h2>
       <p id="end-quote"></p>
       <p id="end-reason" class="muted"></p>
-      <dl id="end-stats"></dl>
-      <ul id="end-weapons"></ul>
+      <div id="end-receipt"></div>
       <div class="row" style="justify-content:center">
-        <button id="b-next" class="btn primary nav" type="button">Prossimo stage →</button>
+        <button id="b-next" class="btn primary nav" type="button">Avanti →</button>
         <button id="b-retry" class="btn nav" type="button">Riprova</button>
         <button id="b-change" class="btn nav" type="button">Cambia personaggio</button>
         <button id="b-menu" class="btn nav" type="button">Menu</button>
@@ -303,9 +415,13 @@ body.in-menu #touch-ui { display: none; }
 </div>
 
 <script src="js/sprites.js"></script>
+<script src="js/sprites2.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/chars.js"></script>
 <script src="js/stages.js"></script>
+<script src="js/bosses.js"></script>
+<script src="js/worlds.js"></script>
+<script src="js/story.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

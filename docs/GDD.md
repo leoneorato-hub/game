@@ -990,3 +990,35 @@ La prima build giocabile vive in `web/`: HTML5 canvas a 640×360 con scaling pix
 
 Gli sprite sono pixel-art originale definita in codice (`web/js/sprites.js`) e ricevono in automatico il contorno d'inchiostro della Regola della Cucitura.
 
+
+---
+
+## 10. Alfa 0.2: risposte alle critiche
+
+### Il gioco ha un obiettivo finale?
+Sì. La modalità **Storia (La Scala dei Finali)** ha un inizio e una fine: Prologo (il Telaio), 8 capitoli, uno per ogni gioco del roster, e il Finale contro **la Cucitrice**. Ogni capitolo si chiude con il boss finale "vero" di quel gioco. Battere la Cucitrice mostra il finale scritto per il personaggio scelto. I capitoli completati restano segnati e i finali sono 8, uno per eroe.
+
+### Qual è il game loop?
+- **Loop della run (5–8 minuti):** muoviti → le armi colpiscono → raccogli i frammenti → scegli un potenziamento. Ogni minuto circa arriva un **evento**. Al minuto 2:30 c'è il **mini-boss** del mondo, poi l'ambiente cambia. Al minuto 5:00 arriva il **boss finale**, preceduto da un dialogo.
+- **Loop della meta:** ogni run, vinta o persa, dà **Filo**. Il Filo si spende nella **Merceria di Sor Ditale** in potenziamenti permanenti. Si prova il capitolo successivo o un altro eroe, con cui cambiano dialoghi e finale.
+
+### Eventi durante la run
+| Evento | Cosa chiede | Il prezzo |
+|---|---|---|
+| **Rammendo** | Restare 10 s dentro un cerchio | Mentre ci sei arrivano più nemici |
+| **Il Rocchetto d'Oro** | Portare un oggetto da A all'altare B | Mentre lo porti sei più lento del 25% e le armi rallentano; 3 colpi e cade |
+| **Un volto noto** | Raggiungere un altro eroe del roster | Nessuno: dialogo tra i due personaggi e un dono a scelta |
+| **Taglia** | Prendere un nemico d'oro che scappa | 25 secondi di tempo |
+
+### Oggetti con un "trucco" che si combinano
+Sono le **Reliquie del Multiverso** (bordo dorato), che non occupano slot. Ago Infilato cuce due nemici e il danno passa dall'uno all'altro. Bottone Esplosivo fa esplodere i nemici uccisi. Specchio Incrinato fa rimbalzare i proiettili. Lacrima Gelata fa congelare i critici. Patto della Cucitrice dà più danno ma nemici più veloci. Ditale del Collezionista aumenta il danno in base ai frammenti raccolti.
+Si combinano in tre **Duetti**: *Cucito Esplosivo*, *Schegge di Ghiaccio* e *Avidità Cucita*.
+
+### Personalità
+- Ogni personaggio ha la sua **voce sintetizzata a bip**, con timbro e altezza propri. I muti restano muti e le loro azioni compaiono tra parentesi quadre.
+- Ci sono incontri scritti tra coppie di eroi (Cavaliere e Penitente: un lunghissimo silenzio "ottima conversazione"), un mercante con le battute (**Sor Ditale**), frasi a rotazione sul titolo e uno **scontrino della merceria** come schermata finale.
+- **Nota onesta:** l'anima di un gioco viene dalle scelte di chi lo fa. Questa alfa è uno strumento per provare le idee. La direzione artistica definitiva, l'umorismo e i difetti "voluti" dovrebbero venire dall'autore.
+
+### Altre modifiche
+- **Grafica:** sprite più grandi e ombreggiati con camminata a 3 fotogrammi, luci dinamiche, particelle d'ambiente per ogni mondo, cambio d'atmosfera a metà run, armi visibili in mano (V1 cambia arma con l'animazione "SWITCH"; il Terrariano usa l'oggetto sopra la testa come in Terraria), i capelli di Madeline che ondeggiano, schede col titolo dei boss.
+- **Bilanciamento:** eroi indeboliti (danno base −10%, curva dell'esperienza più ripida) e nemici indeboliti (danno −20%, vita che cresce più lentamente). Il raggio di raccolta passa da 40 a 50 px.
