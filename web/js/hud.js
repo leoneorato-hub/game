@@ -111,12 +111,12 @@ function render(c) {
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.imageSmoothingEnabled = false;
   if (!G) { drawMenuBg(c); return; }
-  const p = G.p;
-  // telecamera morbida con un leggero anticipo nella direzione di marcia
-  G.cam = G.cam || { x: p.x, y: p.y };
-  const lead = p.moving ? 18 : 0;
-  G.cam.x += (p.x + p.mx * lead - G.cam.x) * 0.12;
-  G.cam.y += (p.y + p.my * lead * 0.6 - G.cam.y) * 0.12;
+  const p = G.p, C = G.center || p;
+  // telecamera morbida sul gruppo, con un leggero anticipo nella direzione di marcia (solo in singolo)
+  G.cam = G.cam || { x: C.x, y: C.y };
+  const lead = C.moving ? 18 : 0;
+  G.cam.x += (C.x + (C.mx || 0) * lead - G.cam.x) * 0.12;
+  G.cam.y += (C.y + (C.my || 0) * lead * 0.6 - G.cam.y) * 0.12;
   let sx = 0, sy = 0;
   if (G.shakeT > 0) { sx = rnd(-G.shakeT, G.shakeT); sy = rnd(-G.shakeT, G.shakeT); }
   camX = Math.round(G.cam.x - W / 2 + sx); camY = Math.round(G.cam.y - H / 2 + sy);
@@ -146,14 +146,19 @@ function render(c) {
   if (G.guilt) { drawSpr(c, 'guilt', G.guilt.x, G.guilt.y + Math.sin(G.t * 4) * 2, false); light(G.guilt.x, G.guilt.y, 24, '#ff6aa0'); }
   drawEvent(c);
   for (const g of G.gems) {
-    const big = g.v >= 5;
-    const s = SPR[(big ? 'gemb_' : 'gem_') + G.char.gem];
+    const x = Math.round(g.x - camX), y = Math.round(g.y - camY);
+    if (x < -16 || x > W + 16 || y < -16 || y > H + 16) continue;
+    const st = g.st || G.char.gem, tier = g.tier ?? 0;
+    const spark = Math.sin(G.t * 5 + (g.ph || 0)) > 0.75;
+    const s = SPR['gem_' + st + '_' + tier + (spark ? '_s' : '')] || SPR['gem_' + st + '_' + tier] || SPR[(tier >= 2 ? 'gemb_' : 'gem_') + st];
     const bob = g.fly ? 0 : Math.round(Math.sin(G.t * 4 + g.x) * 1);
-    c.drawImage(s.img, Math.round(g.x - camX - s.w / 2), Math.round(g.y - camY - s.h / 2) + bob);
-    if (big) light(g.x, g.y, 14, null);
+    c.drawImage(s.img, x - Math.floor(s.w / 2), y - Math.floor(s.h / 2) + bob);
+    if (tier >= 2) light(g.x, g.y, 10 + tier * 5, tier === 3 ? '#ffffff' : null);
   }
   for (const k of G.pickups) {
-    const spr = k.kind === 'food' ? (G.char.id === 'isaac' ? 'heart' : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
+    let spr = k.kind === 'food' ? (G.char.id === 'isaac' ? 'heart' : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
+    if (!SPR[spr]) spr = PK_FALLBACK[spr] || 'chest';
+    if (k.kind.startsWith('pk_')) { const pc = PK_GLOW[k.kind] || '#ffd23f'; c.fillStyle = pc; c.globalAlpha = 0.18 + 0.12 * Math.sin(k.t * 5); c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 9, 0, TAU); c.fill(); c.globalAlpha = 1; light(k.x, k.y, 26, pc); }
     const bob = Math.sin(k.t * 4) * 1.5;
     if (k.kind === 'chest') { c.fillStyle = `rgba(226,176,74,${0.25 + 0.2 * Math.sin(k.t * 6)})`; c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 10, 0, TAU); c.fill(); light(k.x, k.y, 36, '#ffd23f'); }
     if (k.kind === 'unravel') { k.x += (k.vx || 0) / 60; k.y += (k.vy || 0) / 60; if (G.arena) arenaClamp(k, false); }
@@ -193,6 +198,8 @@ function render(c) {
       continue;
     }
     if (e.elite) { c.strokeStyle = `rgba(226,176,74,${0.5 + 0.3 * Math.sin(G.t * 6)})`; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y + 6, e.r + 4, (e.r + 4) * 0.45, 0, 0, TAU); c.stroke(); }
+    if (e.armored) { c.strokeStyle = 'rgba(255,90,90,.55)'; c.beginPath(); c.ellipse(x, y + 7, e.r + 3, (e.r + 3) * 0.4, 0, 0, TAU); c.stroke(); }
+    if (e.prop && e.light) light(e.x, e.y - 6, 30 + 4 * Math.sin(G.t * 7 + e.x), e.light);
     const fr = Math.floor(e.t * 6 + e.r) % 2 && SPR[e.spr + '_b'] ? e.spr + '_b' : e.spr;
     const s = SPR[fr];
     const sc = e.big || 1;
@@ -218,8 +225,15 @@ function render(c) {
     if ((e.elite || (e.anchored && e.type === 'anchor') || e.golden) && e.hp < e.maxHp) bar(c, x - 10, y - s.h * sc / 2 - 6, 20, 2, e.hp / e.maxHp, e.golden ? '#ffd23f' : e.anchored ? '#e2b04a' : '#e0303a');
   }
 
-  for (const w of G.weapons) WEAPONS[w.id].draw?.(w, c);
-  drawPlayer(c);
+  const cur0 = G.cur;
+  for (const pl of G.players) {
+    usePl(pl);
+    if (pl.down) { drawDowned(c, pl); continue; }
+    for (const w of G.weapons) WEAPONS[w.id].draw?.(w, c);
+    drawPlayer(c);
+    if (coop()) drawTag(c, pl);
+  }
+  usePl(cur0);
 
   for (const pr of G.projs) {
     if (pr.dead) continue;
@@ -274,7 +288,7 @@ function render(c) {
   G.stage.drawOver?.(c);
   drawFx(c);
   drawAmbient(c);
-  light(p.x, p.y, 100 + Math.sin(G.t * 3) * 3, null);
+  for (const pl of G.players) light(pl.p.x, pl.p.y, (pl.down ? 50 : 100) + Math.sin(G.t * 3) * 3, null);
   if (G.bossE && !G.bossE.dead) light(G.bossE.x, G.bossE.y, 60, G.bossE.def?.col || null);
   applyLighting(c);
   if (G.moonT > 0) { c.fillStyle = 'rgba(160,0,20,.18)'; c.fillRect(0, 0, W, H); }
@@ -284,11 +298,14 @@ function render(c) {
   if (MODE === 'dialog') { c.fillStyle = '#000'; c.fillRect(0, 0, W, 26); c.fillRect(0, H - 26, W, 26); }
   else drawHUD(c);
   if (G.titleCard) drawTitleCard(c);
+  drawCutin(c);
   if (MODE === 'panic') drawPanic(c);
   if (MODE === 'cine') drawCine(c);
   if (G.touch) drawTouch(c);
 }
 
+const PK_FALLBACK = { pk_rosary: 'p_relic', pk_hourglass: 'kevin', pk_bomb: 'pill', pk_purse: 'spool', pk_purse_big: 'spool', pk_ultorb: 'dashcrystal', pk_revive: 'spool', pk_magnet: 'yarn' };
+const PK_GLOW = { pk_rosary: '#ffe680', pk_hourglass: '#9fdcff', pk_bomb: '#ffb03a', pk_purse: '#e2b04a', pk_purse_big: '#ffd23f', pk_ultorb: '#fff2b0', pk_revive: '#ffd23f', pk_magnet: '#e2b04a' };
 function goldOf(name) { const s = SPR[name]; if (!s.gold) s.gold = tinted(s.img, '#ffd23f'); return s.gold; }
 
 function drawTitleCard(c) {
@@ -343,7 +360,8 @@ function heldSprite(ch) {
 function drawHeld(c, x, y) {
   const p = G.p, ch = G.char;
   const fx = p.fx < 0 ? -1 : 1;
-  const hx = x + fx * 6, hy = y + 4;
+  // la mano viene dai metadati dello sprite (Alfa 4); altrimenti posizione standard
+  const hx = G.handPt ? G.handPt[0] : x + fx * 6, hy = G.handPt ? G.handPt[1] : y + 4;
   if (ch.id === 'v1') {
     const gun = { revolver: 'W_revolver', shotgun: 'W_shotgun', nailgun: 'W_nailgun' }[G.activeGun];
     if (!gun) return;
@@ -385,7 +403,9 @@ function drawHeld(c, x, y) {
 function drawHair(c, x, y, flip, col) {
   const p = G.p;
   const head = { x: x + (flip ? 3 : -3), y: y - 9 };
-  p.hairPts = p.hairPts || Array.from({ length: 7 }, () => ({ x: head.x, y: head.y }));
+  const small = !!(window.HERO_META && HERO_META.madeline);
+  if (small) { head.x = x + (flip ? 4 : -4); head.y = y - 14; }
+  p.hairPts = p.hairPts || Array.from({ length: small ? 4 : 7 }, () => ({ x: head.x, y: head.y }));
   const back = flip ? 1 : -1;
   let prev = head;
   p.hairPts.forEach((h, i) => {
@@ -395,10 +415,18 @@ function drawHair(c, x, y, flip, col) {
   });
   const [r0, r1, r2] = ramp(col);
   const css = rgb => `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-  for (let i = p.hairPts.length - 1; i >= 0; i--) { const h = p.hairPts[i], r = 4.4 - i * 0.45; c.fillStyle = css(r0); c.beginPath(); c.arc(Math.round(h.x - camX), Math.round(h.y - camY), r + 1, 0, TAU); c.fill(); }
-  for (let i = p.hairPts.length - 1; i >= 0; i--) { const h = p.hairPts[i], r = 4.4 - i * 0.45; c.fillStyle = css(r2); c.beginPath(); c.arc(Math.round(h.x - camX), Math.round(h.y - camY), r, 0, TAU); c.fill(); c.fillStyle = css(r1); c.beginPath(); c.arc(Math.round(h.x - camX) + 1, Math.round(h.y - camY) + 1, r * 0.6, 0, TAU); c.fill(); }
+  const R0 = small ? 2.6 : 4.4;
+  for (let i = p.hairPts.length - 1; i >= 0; i--) { const h = p.hairPts[i], r = R0 - i * 0.45; c.fillStyle = css(r0); c.beginPath(); c.arc(Math.round(h.x - camX), Math.round(h.y - camY), r + 1, 0, TAU); c.fill(); }
+  for (let i = p.hairPts.length - 1; i >= 0; i--) { const h = p.hairPts[i], r = R0 - i * 0.45; c.fillStyle = css(r2); c.beginPath(); c.arc(Math.round(h.x - camX), Math.round(h.y - camY), r, 0, TAU); c.fill(); c.fillStyle = css(r1); c.beginPath(); c.arc(Math.round(h.x - camX) + 1, Math.round(h.y - camY) + 1, r * 0.6, 0, TAU); c.fill(); }
 }
 
+// metadati dello sprite dell'eroe (mano, testa) dal nome del fotogramma
+function heroMeta(frame) {
+  const H = window.HERO_META;
+  if (!H) return null;
+  const base = frame.replace(/_(i0|i1|bl|w[0-3]|hu)$/, '');
+  return H[base] || H[base.split('_')[0]] || null;
+}
 function drawPlayer(c) {
   const p = G.p;
   const ch = G.char;
@@ -423,21 +451,34 @@ function drawPlayer(c) {
   if (p.dash) { for (let i = 1; i <= 4; i++) { c.globalAlpha = 0.4 / i; c.drawImage(flip ? s.flipWhite : s.white, x - s.w / 2 - p.dash.dx * 7 * i, y - s.h / 2 - p.dash.dy * 7 * i); } c.globalAlpha = 1; }
   if (!blink) {
     const fxDir = flip ? -1 : 1;
+    { const MT = heroMeta(name), dw = Math.round(s.w * (p.dash ? 1.15 : 1)), dh = Math.round(s.h * (p.dash ? 0.88 : 1)); const sx0 = x - Math.floor(dw / 2), sy0 = y + Math.floor(s.h / 2) - dh - lift; G.handPt = MT && MT.hand ? [sx0 + (flip ? s.w - 1 - MT.hand[0] : MT.hand[0]), sy0 + MT.hand[1]] : null; }
     const behind = ch.id !== 'v1' && (p.fx < 0 ? true : false);
     if (behind) drawHeld(c, x, y - lift);
     if (ch.id === 'madeline') drawHair(c, p.x, p.y - 6 - lift, flip, p.charges <= 0 ? '#5fb3ff' : (getW('dash')?.evo && p.charges >= 2 ? '#ff7ad9' : '#d1343a'));
     const sqx = p.dash ? 1.15 : 1, sqy = p.dash ? 0.88 : 1;
     const dw = Math.round(s.w * sqx), dh = Math.round(s.h * sqy);
-    c.drawImage(flip ? s.flip : s.img, x - Math.floor(dw / 2), y + Math.floor(s.h / 2) - dh - lift, dw, dh);
+    const sx0 = x - Math.floor(dw / 2), sy0 = y + Math.floor(s.h / 2) - dh - lift;
+    c.drawImage(flip ? s.flip : s.img, sx0, sy0, dw, dh);
+    const MT = heroMeta(name);
+    const mx = v => (flip ? s.w - 1 - v : v);
     if (ch.id === 'isaac') {
-      const hx = x - Math.floor(s.w / 2), hy = y - Math.floor(s.h / 2) - lift;
-      if (owned('brimstone')) { c.drawImage(SPR.acc_horns.img, hx + 9, hy + 3); }
-      if (G.guppy) c.drawImage(SPR.acc_ears.img, hx + 9, hy + 4);
-      if (owned('innereye')) c.drawImage(SPR.acc_eye3.img, hx + 12, hy + 7);
+      if (MT) {
+        const ax = sx0 + mx(MT.head[0]), ay = sy0 + MT.head[1];
+        if (owned('brimstone')) { const a = SPR.acc_horns; c.drawImage(a.img, Math.round(ax - a.w / 2), ay - 2); }
+        if (G.guppy) { const a = SPR.acc_ears; c.drawImage(a.img, Math.round(ax - a.w / 2), ay); }
+        if (owned('innereye')) { const a = SPR.acc_eye3; c.drawImage(a.img, Math.round(ax - a.w / 2), ay + 6); }
+      } else {
+        const hx = x - Math.floor(s.w / 2), hy = y - Math.floor(s.h / 2) - lift;
+        if (owned('brimstone')) { c.drawImage(SPR.acc_horns.img, hx + 9, hy + 3); }
+        if (G.guppy) c.drawImage(SPR.acc_ears.img, hx + 9, hy + 4);
+        if (owned('innereye')) c.drawImage(SPR.acc_eye3.img, hx + 12, hy + 7);
+      }
     }
-    if (ch.id === 'prisoner' && !p.headless) light(p.x, p.y - 16, 38, '#3fc8b8');
+    G.handPt = MT && MT.hand ? [sx0 + mx(MT.hand[0]), sy0 + MT.hand[1]] : null;
+    if (ch.id === 'prisoner' && !p.headless) light(p.x, p.y - 18, 40, (MT && MT.glow) || '#e8608f');
     if (ch.id === 'v1') light(p.x, p.y - 8, 34, '#f6b955');
     if (!behind) drawHeld(c, x, y - lift);
+    drawUltimate(c, x, y);
     if (p.castT > 0) {
       const col = p.castCol || '#cfe0ff';
       c.strokeStyle = col; c.globalAlpha = p.castT * 2;
@@ -517,11 +558,11 @@ function drawHUD(c) {
   txt(c, G.level, 16, 10, '#ffe08a', 8, 'center');
   if (G.chapter) txt(c, G.chapter, 34, 16, '#a89a88');
 
-  // B — Spoletta: targa del timer
-  const t = G.t;
+  // B — Spoletta: targa del timer (nell'Endless conta il tempo del mondo corrente)
+  const t = segT();
   const tcol = t > G.times.cont - 10 ? '#ff5a4a' : '#efe6d2';
   panelFrame(c, W / 2 - 44, 15, 88, 22);
-  txt(c, fmtTime(t), W / 2 + 6, 18, tcol, 16, 'center');
+  txt(c, fmtTime(G.mode === 'endless' ? G.t : t), W / 2 + 6, 18, tcol, 16, 'center');
   const spoolFrac = clamp(1 - t / G.times.cont, 0, 1);
   const sxp = W / 2 - 34;
   c.fillStyle = '#8c6a2f'; c.fillRect(sxp - 4, 18, 9, 2); c.fillRect(sxp - 4, 32, 9, 2);
@@ -564,19 +605,20 @@ function drawHUD(c) {
   // E — Pannello di contesto
   if (!eventHud(c, W - 6, 36)) G.stage.hud?.(c, W - 6, 36);
 
-  // F — Anello del Telaio
-  drawRing(c);
-  // G — Risorse native (su un pannello)
-  panelFrame(c, 78, H - 56, 200, 50, '#8c6a2f');
-  drawResources(c, 84, H - 50);
-  // H — Passivi
-  drawPassives(c, 84, H - 14);
-
-  // Isaac: le 6 statistiche sul bordo sinistro, come nell'originale
-  if (ch.id === 'isaac' && G.ist) {
-    const s = G.ist;
-    const rows = [['DMG', s.dmg * s.dmgMul], ['LACR', s.realTears], ['GITT', s.range], ['V.COL', s.shot], ['VEL', s.speed], ['FORT', s.luck]];
-    rows.forEach(([k, v], i) => { txt(c, k, 4, 110 + i * 10, '#a89a88'); txt(c, v.toFixed(2), 34, 110 + i * 10, '#efe6d2'); });
+  if (coop()) drawCoopPanels(c);
+  else {
+    // F — Equipaggiamento: ARMI e SUPPORTO in due file separate
+    drawLoadout(c, 6, 30);
+    // G — Ritratto con l'anello dell'Ultimate + risorse native
+    panelFrame(c, 52, H - 52, 214, 46, '#8c6a2f');
+    drawResources(c, 60, H - 46);
+    drawHudPortrait(c, 28, H - 30, 21);
+    // Isaac: le 6 statistiche sul bordo sinistro, come nell'originale
+    if (ch.id === 'isaac' && G.ist) {
+      const s = G.ist;
+      const rows = [['DMG', s.dmg * s.dmgMul], ['LACR', s.realTears], ['GITT', s.range], ['V.COL', s.shot], ['VEL', s.speed], ['FORT', s.luck]];
+      rows.forEach(([k, v], i) => { txt(c, k, 6, 150 + i * 10, '#a89a88'); txt(c, v.toFixed(2), 36, 150 + i * 10, '#efe6d2'); });
+    }
   }
 
   // Indicatori fuori schermo
@@ -602,11 +644,9 @@ function drawHUD(c) {
   if (G.invertT > 0) txt(c, 'COMANDI INVERTITI ' + G.invertT.toFixed(1), W / 2, H - 80, '#d9a83a', 8, 'center');
   if (G.overcharmed) txt(c, 'SOVRACCARICO: DANNO SUBITO ×2', W / 2, H - 90, '#e0303a', 8, 'center');
 
-  // Vignetta cucita (pericolo)
-  let danger = 0;
-  if (ch.hpMode === 'anxiety') danger = p.hp / 100;
-  else danger = 1 - p.hp / p.maxHp;
-  if ((ch.hpMode === 'anxiety' && danger > 0.7) || (ch.hpMode !== 'anxiety' && danger > 0.66)) {
+  // Vignetta cucita (pericolo): basta un giocatore in difficoltà
+  const risky = G.players.some(pl => !pl.down && (pl.char.hpMode === 'anxiety' ? pl.p.hp / 100 > 0.7 : 1 - pl.p.hp / pl.p.maxHp > 0.66));
+  if (risky) {
     c.globalAlpha = 0.5 + 0.4 * Math.sin(G.t * 6);
     stitchRect(c, 3, 3, W - 6, H - 6, '#e0303a');
     stitchRect(c, 6, 6, W - 12, H - 12, '#e0303a');
@@ -693,6 +733,159 @@ function drawRing(c) {
     if (w.disabled || G.silenced) { c.strokeStyle = '#e0303a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x - 5, y - 5); c.lineTo(x + 5, y + 5); c.stroke(); c.lineWidth = 1; }
     if (d.slot && G.boons[d.slot]) { const g = GODS[G.boons[d.slot].god]; c.fillStyle = INK; c.fillRect(x + 3, y - 9, 5, 5); c.fillStyle = g.col; c.fillRect(x + 4, y - 8, 3, 3); }
   }
+}
+// --- Equipaggiamento (Alfa 4): due file etichettate, così si capisce subito cosa è un'arma
+// (attacca da sola) e cosa è un oggetto di supporto (potenzia tutto il resto).
+function drawWSlot(c, x, y, sz, w, mini) {
+  const d = WEAPONS[w.id];
+  const col = d.tiers ? TIERS[w.lvl - 1].c : d.icon[1];
+  const full = w.lvl >= d.max;
+  const ic = icon(d.icon[0], w.evo ? '#ffd23f' : col, d.icon[2]);
+  const k = sz >= 16 ? 1 : 0.8;
+  c.drawImage(ic, Math.round(x + sz / 2 - 5 * k), Math.round(y + sz / 2 - 5 * k), 10 * k, 10 * k);
+  if (w.cdMax > 0.35 && w.t > 0 && !mini) {
+    const f = clamp(w.t / w.cdMax, 0, 1);
+    c.fillStyle = 'rgba(10,6,14,.55)'; c.fillRect(x + 1, y + 1 + Math.round((sz - 2) * (1 - f)), sz - 2, Math.round((sz - 2) * f));
+  }
+  if (d.prayer) { const f = clamp(G.p.fervour / prayerCost(w), 0, 1); c.fillStyle = f >= 1 ? '#5fb3ff' : 'rgba(95,179,255,.5)'; c.fillRect(x + 1, y + sz - 2, Math.round((sz - 2) * f), 1); }
+  if (d.gun && G.char.id === 'v1') { if (G.activeGun === w.id) { c.strokeStyle = '#7ec8ff'; c.strokeRect(x - 0.5, y - 0.5, sz + 1, sz + 1); } else { c.fillStyle = 'rgba(20,14,24,.5)'; c.fillRect(x + 1, y + 1, sz - 2, sz - 2); } }
+  if (w.disabled || G.silenced) { c.strokeStyle = '#e0303a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x + 3, y + 3); c.lineTo(x + sz - 3, y + sz - 3); c.stroke(); c.lineWidth = 1; }
+  if (d.slot && G.boons[d.slot]) { const g = GODS[G.boons[d.slot].god]; c.fillStyle = INK; c.fillRect(x + sz - 5, y - 1, 5, 5); c.fillStyle = g.col; c.fillRect(x + sz - 4, y, 3, 3); }
+  // livello: pallini sotto lo slot, oro quando è al massimo, stella se evoluta
+  if (!mini) {
+    const n = Math.min(d.max, 8), gap = sz / n;
+    for (let i = 0; i < n; i++) { c.fillStyle = i < w.lvl ? (full ? '#ffd23f' : '#efe6d2') : '#3a2f3e'; c.fillRect(Math.round(x + i * gap + gap / 2 - 0.5), y + sz + 1, 1, 2); }
+  }
+  if (w.evo) { c.fillStyle = '#ffd23f'; c.fillRect(x + 1, y + 1, 3, 1); c.fillRect(x + 2, y, 1, 3); }
+}
+function slotBox(c, x, y, sz, col, on, glow) {
+  c.fillStyle = INK; c.fillRect(x - 1, y - 1, sz + 2, sz + 2);
+  const g = c.createLinearGradient(0, y, 0, y + sz); g.addColorStop(0, on ? '#3a2c44' : '#211828'); g.addColorStop(1, on ? '#1e1626' : '#17111d');
+  c.fillStyle = g; c.fillRect(x, y, sz, sz);
+  c.strokeStyle = on ? col : '#3a2f3e'; c.strokeRect(x + 0.5, y + 0.5, sz - 1, sz - 1);
+  if (glow) { c.strokeStyle = `rgba(255,240,180,${0.35 + 0.35 * Math.sin(G.t * 6)})`; c.strokeRect(x - 1.5, y - 1.5, sz + 3, sz + 3); }
+}
+function drawLoadout(c, x, y) {
+  const ch = G.char, nW = ch.maxW || 6;
+  const sup = passiveList();
+  const nS = Math.max(6, Math.min(16, sup.length));
+  const rowsS = Math.ceil(nS / 8);
+  const wSz = 17, sSz = 13;
+  const w = 40 + Math.max(nW * (wSz + 3), Math.min(8, nS) * (sSz + 3)) + 4;
+  const h = 8 + wSz + 6 + rowsS * (sSz + 4) + 4;
+  panelFrame(c, x, y, w, h, '#8c6a2f');
+  // ARMI
+  txt(c, 'ARMI', x + 6, y + 6, '#e2b04a', 8);
+  txt(c, G.weapons.length + '/' + nW, x + 6, y + 15, '#6b6577', 8);
+  for (let i = 0; i < nW; i++) {
+    const sx = x + 40 + i * (wSz + 3), sy = y + 5, wpn = G.weapons[i];
+    const ready = wpn && EVOS.some(r => r.char === ch.id && r.w === wpn.id && evoReady(r));
+    slotBox(c, sx, sy, wSz, wpn && wpn.lvl >= WEAPONS[wpn.id].max ? '#ffd23f' : '#c9a050', !!wpn, ready);
+    if (wpn) drawWSlot(c, sx, sy, wSz, wpn);
+  }
+  c.fillStyle = 'rgba(226,176,74,.25)'; c.fillRect(x + 6, y + wSz + 10, w - 12, 1);
+  // SUPPORTO (passivi, amuleti, reliquie)
+  const sy0 = y + wSz + 14;
+  txt(c, 'SUPP.', x + 6, sy0 + 2, '#7ad0c8', 8);
+  for (let i = 0; i < nS; i++) {
+    const sx = x + 40 + (i % 8) * (sSz + 3), sy = sy0 + Math.floor(i / 8) * (sSz + 4);
+    const it = sup[i], d = it && PASSIVES[it.id];
+    slotBox(c, sx, sy, sSz, d && d.relic ? '#ffd23f' : '#5fbfb6', !!it);
+    if (!it) continue;
+    c.drawImage(icon(d.icon[0], d.icon[1], d.icon[2]), sx + 1, sy + 1, 11, 11);
+    if (d.max > 1 && d.max < 99) { c.fillStyle = it.lvl >= d.max ? '#ffd23f' : '#efe6d2'; for (let k = 0; k < Math.min(it.lvl, 6); k++) c.fillRect(sx + 1 + k * 2, sy + sSz + 1, 1, 1); }
+    if (d.relic) { c.fillStyle = '#ffd23f'; c.fillRect(sx + sSz - 3, sy, 3, 3); }
+    if (d.charm) { c.fillStyle = G.overcharmed ? '#e0303a' : '#9aa6b8'; c.fillRect(sx, sy, 2, 2); }
+  }
+}
+// Ritratto con anello dell'Ultimate (si riempie in senso orario; brilla quando è pronta)
+function drawHudPortrait(c, x, y, r, pl) {
+  const ch = G.char, p = G.p, U = ULTS[ch.id];
+  c.fillStyle = INK; c.beginPath(); c.arc(x, y, r + 3, 0, TAU); c.fill();
+  c.fillStyle = '#2a1f2e'; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+  if (ch.id === 'knight') {
+    const f = p.soul / 99;
+    c.save(); c.beginPath(); c.arc(x, y, r - 1, 0, TAU); c.clip();
+    c.fillStyle = '#e8ecf2'; c.globalAlpha = 0.35; c.fillRect(x - r, y + r - 2 * r * f, 2 * r, 2 * r * f); c.globalAlpha = 1;
+    c.restore();
+  }
+  const pn = (ch.id === 'madeline' && p.charges <= 0 ? 'madeline_blue' : ch.spr) + ((G.t % 3.4) < 0.13 ? '_bl' : '_i0');
+  const s = SPR[pn] || SPR[ch.spr];
+  c.save(); c.beginPath(); c.arc(x, y, r - 0.5, 0, TAU); c.clip();
+  const k = (r * 2.3) / Math.max(s.w, s.h * 0.75);
+  c.drawImage(s.img, Math.round(x - s.w * k / 2), Math.round(y - s.h * k * 0.36), s.w * k, s.h * k);
+  c.restore();
+  const owned = ultOwned(ch.id), f = clamp((p.ult || 0) / 100, 0, 1);
+  c.lineWidth = 3;
+  c.strokeStyle = '#3a2f3e'; c.beginPath(); c.arc(x, y, r + 1.5, 0, TAU); c.stroke();
+  if (owned) {
+    c.strokeStyle = f >= 1 ? (Math.sin(G.t * 10) > 0 ? '#ffffff' : U.col) : U.col;
+    c.beginPath(); c.arc(x, y, r + 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * f); c.stroke();
+  }
+  c.lineWidth = 1;
+  c.strokeStyle = pl ? pl.col : '#e2b04a'; c.beginPath(); c.arc(x, y, r + 3.5, 0, TAU); c.stroke();
+  // badge del tasto
+  const bx = x + r - 4, by = y + r - 6;
+  if (owned) {
+    const ready = f >= 1;
+    c.fillStyle = INK; c.fillRect(bx - 1, by - 1, 15, 11);
+    c.fillStyle = ready ? U.col : '#2a1f2e'; c.fillRect(bx, by, 13, 9);
+    const key = pl && pl.dev !== 'solo' && pl.dev !== 'kb1' ? (pl.dev.startsWith('pad') ? 'Y' : '★') : (G.touch ? '★' : 'E');
+    txt(c, key, bx + 7, by + 1, ready ? INK : '#a89a88', 8, 'center', false);
+    if (ready) light(G.p.x, G.p.y, 0, null);
+  } else if (!pl) { c.fillStyle = INK; c.fillRect(bx - 1, by - 1, 11, 11); c.drawImage(icon('knife', '#6b6577', '#3a2f3e'), bx, by, 9, 9); }
+}
+// Co-op: un pannello compatto per giocatore lungo il bordo basso
+function drawCoopPanels(c) {
+  const n = G.players.length, pw = Math.min(156, Math.floor((W - 12) / n) - 4), ph = 50;
+  const lead = G.cur;
+  G.players.forEach((pl, i) => {
+    const x = Math.round(W / 2 - (n * (pw + 4)) / 2 + i * (pw + 4) + 2), y = H - ph - 4;
+    usePl(pl);
+    const p = G.p, ch = G.char;
+    c.globalAlpha = pl.down ? 0.6 : 1;
+    panelFrame(c, x, y, pw, ph, pl.col);
+    drawHudPortrait(c, x + 17, y + 18, 12, pl);
+    txt(c, pl.label, x + 4, y + 36, pl.col, 8);
+    txt(c, ch.name.replace(/^Il |^La /, '').toUpperCase(), x + 34, y + 4, '#efe6d2', 8);
+    // vita
+    const hx = x + 34, hy = y + 14, bw = pw - 40;
+    if (pl.down) { txt(c, 'A TERRA', hx, hy - 1, '#e0303a', 8); bar(c, hx, hy + 9, bw, 3, pl.reviveK, '#ffd23f'); }
+    else if (ch.hpMode === 'masks' || ch.hpMode === 'hearts') {
+      const units = ch.hpMode === 'hearts' ? p.maxHp / 2 : p.maxHp;
+      for (let k = 0; k < units; k++) {
+        const v = ch.hpMode === 'hearts' ? clamp(p.hp - k * 2, 0, 2) / 2 : (k < p.hp ? 1 : 0);
+        c.drawImage(icon(ch.hpMode === 'hearts' ? 'heart' : 'shield', v >= 1 ? (ch.hpMode === 'hearts' ? '#e0303a' : '#f2efe6') : v > 0 ? '#a8323a' : '#3a2f3e', '#14101a'), hx + k * 8, hy, 8, 8);
+      }
+    } else if (ch.hpMode === 'anxiety') { bar(c, hx, hy + 1, bw, 5, p.hp / 100, p.hp > 70 ? '#ff4a8a' : '#7a3aa0'); txt(c, 'ANSIA', hx + bw - 26, hy + 7, '#d08aff', 8); }
+    else bar(c, hx, hy + 1, bw, 5, p.hp / p.maxHp, '#c41e2a', null, 'hp' + i);
+    // armi e supporto in miniatura
+    const wy = y + 27;
+    for (let k = 0; k < Math.min(6, ch.maxW || 6); k++) { const sx = hx + k * 12; slotBox(c, sx, wy, 10, '#c9a050', !!G.weapons[k]); if (G.weapons[k]) drawWSlot(c, sx, wy, 10, G.weapons[k], true); }
+    passiveList().slice(0, Math.floor((pw - 40) / 8)).forEach((it, k) => { const d = PASSIVES[it.id]; c.drawImage(icon(d.icon[0], d.icon[1], d.icon[2]), hx + k * 8, wy + 12, 7, 7); });
+    c.globalAlpha = 1;
+  });
+  usePl(lead);
+}
+// Etichetta P1..P4 sopra al personaggio + anello colorato ai piedi
+function drawTag(c, pl) {
+  const x = Math.round(pl.p.x - camX), y = Math.round(pl.p.y - camY);
+  c.strokeStyle = pl.col; c.globalAlpha = 0.7; c.beginPath(); c.ellipse(x, y + 10, 9, 3, 0, 0, TAU); c.stroke(); c.globalAlpha = 1;
+  const s = SPR[G.char.spr];
+  const ty = y - 6 - (s ? s.h / 2 : 18) - 9;
+  c.fillStyle = pl.col; c.beginPath(); c.moveTo(x - 3, ty + 7); c.lineTo(x + 3, ty + 7); c.lineTo(x, ty + 10); c.fill();
+  txt(c, pl.label, x, ty - 2, pl.col, 8, 'center');
+}
+// Giocatore a terra: sagoma pallida, anello di rianimazione
+function drawDowned(c, pl) {
+  const x = Math.round(pl.p.x - camX), y = Math.round(pl.p.y - camY);
+  const s = SPR[pl.char.spr + '_hu'] || SPR[pl.char.spr];
+  c.globalAlpha = 0.45 + 0.15 * Math.sin(G.t * 4);
+  c.drawImage(s.white, x - s.w / 2, y - 6 - s.h / 2 + 4);
+  c.globalAlpha = 1;
+  c.strokeStyle = '#3a2f3e'; c.lineWidth = 3; c.beginPath(); c.arc(x, y - 6, 15, 0, TAU); c.stroke();
+  c.strokeStyle = '#ffd23f'; c.beginPath(); c.arc(x, y - 6, 15, -Math.PI / 2, -Math.PI / 2 + TAU * pl.reviveK); c.stroke(); c.lineWidth = 1;
+  txt(c, pl.label + ' · AIUTO!', x, y - 34 + Math.sin(G.t * 5) * 2, pl.col, 8, 'center');
 }
 function synColor(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return ['#5fb3ff', '#ff7ad9', '#7aff9a', '#ffd23f', '#ff8a5a', '#c9a6ff'][h % 6]; }
 function passivePos(id) {
@@ -878,19 +1071,21 @@ function drawTouch(c) {
 }
 
 // --- Sfondo del menu ---------------------------------------------------------------------------
-let menuT = 0;
+let menuT = 0, MENU_TILES = null;
 function drawMenuBg(c) {
   if (!TILES) return;
   menuT += 1 / 60;
   camX = Math.round(menuT * 18); camY = -H / 2 + 20;
   const save = G;
   c.fillStyle = '#120c16'; c.fillRect(0, 0, W, H);
-  const kinds = ['hk', 'hades', 'celeste', 'terra', 'blas'];
+  // Alfa 4: le toppe del menu usano le piastrelle dipinte dei mondi
+  if (!MENU_TILES && typeof WORLDS !== 'undefined') MENU_TILES = ['hallownest', 'inferno', 'tartaro', 'celeste', 'deadcells', 'cvstodia', 'terraria', 'basement'].map((id, i) => paintTile(WORLDS[id].tiles[0], 7 + i));
+  const kinds = MENU_TILES || ['hk', 'hades', 'celeste', 'terra', 'blas'].map(k => TILES[k]);
   const x0 = Math.floor(camX / 32) - 1, y0 = Math.floor(camY / 32) - 1;
   for (let tx = x0; tx < x0 + W / 32 + 3; tx++) for (let ty = y0; ty < y0 + H / 32 + 3; ty++) {
     const px = tx * 32 - camX, py = ty * 32 - camY;
     const pk = hash2(Math.floor(tx / 3), Math.floor(ty / 3)) % kinds.length;
-    c.drawImage(TILES[kinds[pk]], px, py);
+    c.drawImage(kinds[pk], px, py);
     if ((tx + 1) % 3 === 0 && hash2(Math.floor((tx + 1) / 3), Math.floor(ty / 3)) % kinds.length !== pk) seamDash(c, px + 31, py, px + 31, py + 32, '#e2b04a');
     if ((ty + 1) % 3 === 0 && hash2(Math.floor(tx / 3), Math.floor((ty + 1) / 3)) % kinds.length !== pk) seamDash(c, px, py + 31, px + 32, py + 31, '#e2b04a');
   }

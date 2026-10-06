@@ -140,24 +140,24 @@ function makeWorld(d) {
       d.init?.();
     },
     clampPos(x, y) { return [x, y]; },
-    spawnPos(a) { const p = G.p; return [p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 260]; },
+    spawnPos(a) { const p = G.center || G.p; return [p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 260]; },
     constrainPlayer() {},
     update(dt) {
-      if (!G.mood2 && d.mood2 && (G.elitesKilled > 0 || G.t > 230)) { G.mood2 = true; banner(d.mood2.name, d.mood2.sub, 2.6, d.mood2.col || '#e2b04a'); sfx('bell'); }
+      const T = G.times || {};
+      if (!G.mood2 && d.mood2 && (G.elitesKilled - (G.segKills || 0) >= (T.moodKills || 1) || G.t - (G.segStart || 0) > (T.mood || 230))) { G.mood2 = true; banner(d.mood2.name, d.mood2.sub, 2.6, d.mood2.col || '#e2b04a'); sfx('bell'); }
       if (G.mood2) G.moodK = Math.min(1, G.moodK + dt * 0.4);
       if (d.wind) {
         G.windT -= dt;
         if (!G.wind && G.windT <= 0) { const a = pick([0, Math.PI, Math.PI / 2, -Math.PI / 2]); G.wind = { x: Math.cos(a), y: Math.sin(a), t: 5 }; banner('VENTO!', 'Le raffiche della Cresta Dorata ti spingono', 1.4, '#bfe4ff'); }
         if (G.wind) {
-          const p = G.p;
-          if (!(p.flyT > 0)) { p.x += G.wind.x * 48 * dt; p.y += G.wind.y * 48 * dt; }
+          for (const pl of G.players || [{ p: G.p }]) { const p = pl.p; if (!pl.down && !(p.flyT > 0)) { p.x += G.wind.x * 48 * dt; p.y += G.wind.y * 48 * dt; } }
           for (const e of G.enemies) if (!e.boss) { e.x += G.wind.x * 30 * dt; e.y += G.wind.y * 30 * dt; }
           if ((G.wind.t -= dt) <= 0) { G.wind = null; G.windT = 20; }
         }
       }
       if (d.pools) {
         G.poolT = (G.poolT ?? 12) - dt;
-        if (G.poolT <= 0) { G.poolT = 14; const a = rnd(TAU); G.zones.push({ type: d.pools.type, x: G.p.x + Math.cos(a) * rnd(60, 160), y: G.p.y + Math.sin(a) * rnd(60, 120), r: d.pools.r, t: 12, k: 0 }); }
+        if (G.poolT <= 0) { G.poolT = 14; const a = rnd(TAU), c = G.center || G.p; G.zones.push({ type: d.pools.type, x: c.x + Math.cos(a) * rnd(60, 160), y: c.y + Math.sin(a) * rnd(60, 120), r: d.pools.r, t: 12, k: 0 }); }
       }
       d.update?.(dt);
     },
@@ -405,7 +405,7 @@ function relicOnKill(e) {
 const EVENT_ORDER = ['capture', 'encounter', 'escort', 'bounty'];
 
 function startEvent() {
-  const p = G.p;
+  const p = G.center || G.p;
   const kind = EVENT_ORDER[G.evIdx++ % EVENT_ORDER.length];
   setTimeout(() => bark('event'), 1600);
   const at = (dmin, dmax) => { const a = rnd(TAU), d = rnd(dmin, dmax); return G.stage.clampPos(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); };
@@ -421,7 +421,8 @@ function startEvent() {
     banner('EVENTO: IL ROCCHETTO D\'ORO', 'Portalo all\'altare. Mentre lo porti sei più lento e le armi rallentano.', 2.8, '#ffd23f');
   } else if (kind === 'encounter') {
     const native = WORLD_NATIVE[G.stage.id];
-    let npc = native && native !== G.char.id ? native : pick(Object.keys(CHARS).filter(id => id !== G.char.id));
+    const inParty = id => (G.players || []).some(pl => pl.char.id === id);
+    let npc = native && !inParty(native) ? native : pick(Object.keys(CHARS).filter(id => !inParty(id)).concat(Object.keys(CHARS).filter(id => id !== G.char.id)).slice(0, 8));
     const [x, y] = at(130, 180);
     G.event = { kind, npc, x, y, t: 45, title: 'INCONTRO', sub: CHARS[npc].name + ' ti aspetta' };
     banner('UN VOLTO NOTO', CHARS[npc].name + ' è finito anche lui nella coperta', 2.4, '#5fb3ff');
@@ -444,17 +445,21 @@ function updateEvent(dt) {
     return;
   }
   const ev = G.event, p = G.p;
+  const near = r2 => (G.players || [G.cur]).find(pl => pl && !pl.down && d2(pl.p.x, pl.p.y, ev.x, ev.y) < r2);
   ev.t -= dt;
   if (ev.kind === 'capture') {
-    const inside = d2(p.x, p.y, ev.x, ev.y) < ev.r * ev.r;
+    const inside = !!near(ev.r * ev.r);
     if (inside) ev.prog += dt;
     G.spawnBoost = inside ? 1.6 : 1;
     if (ev.prog >= ev.need) { endEvent(true); dropPickup('chest', ev.x, ev.y); fxRing(ev.x, ev.y, 4, 60, '#e2b04a', 0.6, 3); }
   } else if (ev.kind === 'escort') {
-    if (!ev.carried && d2(p.x, p.y, ev.ax, ev.ay) < 14 * 14) { ev.carried = true; sfx('pick'); banner('PRESO!', 'Tre colpi e lo fai cadere', 1.2, '#ffd23f'); }
-    if (ev.carried) { ev.ax = p.x; ev.ay = p.y - 14; if (d2(p.x, p.y, ev.bx, ev.by) < 20 * 20) { endEvent(true); offerRelic(); for (let i = 0; i < 12; i++) dropGem(ev.bx + rnd(-20, 20), ev.by + rnd(-20, 20), 3); } }
+    if (!ev.carried) { const who = (G.players || [G.cur]).find(pl => pl && !pl.down && d2(pl.p.x, pl.p.y, ev.ax, ev.ay) < 14 * 14); if (who) { ev.carried = who; sfx('pick'); banner('PRESO!', 'Tre colpi e lo fai cadere', 1.2, '#ffd23f'); } }
+    if (ev.carried && ev.carried.down) { ev.carried = false; ev.hits = 0; }
+    if (ev.carried) { const cp = ev.carried.p; ev.ax = cp.x; ev.ay = cp.y - 14; if (d2(cp.x, cp.y, ev.bx, ev.by) < 20 * 20) { endEvent(true); offerRelic(); for (let i = 0; i < 12; i++) dropGem(ev.bx + rnd(-20, 20), ev.by + rnd(-20, 20), 3); } }
   } else if (ev.kind === 'encounter') {
-    if (d2(p.x, p.y, ev.x, ev.y) < 16 * 16) {
+    const who = near(16 * 16);
+    if (who) {
+      usePl(who);
       const npc = ev.npc;
       G.event = null; G.evT = 62;
       startDialog(encounterLines(G.char.id, npc), () => offerGift(npc));
@@ -473,8 +478,8 @@ function endEvent(ok, silent) {
   G.event = null; G.spawnBoost = 1;
   if (!silent) { banner(ok ? 'EVENTO COMPLETATO' : 'EVENTO FALLITO', ok ? 'Ricompensa a terra' : 'Andrà meglio la prossima volta', 1.8, ok ? '#7aff9a' : '#a89a88'); if (ok) sfx('lvl'); }
 }
-function eventHurt() { const ev = G.event; if (ev && ev.kind === 'escort' && ev.carried && ++ev.hits >= 3) { ev.carried = false; ev.hits = 0; ev.ay += 14; banner('CADUTO!', 'Il Rocchetto è a terra: riprendilo', 1.2, '#ff5a6a'); } }
-const carrying = () => G.event && G.event.kind === 'escort' && G.event.carried;
+function eventHurt() { const ev = G.event; if (ev && ev.kind === 'escort' && ev.carried && ev.carried === G.cur && ++ev.hits >= 3) { ev.carried = false; ev.hits = 0; ev.ay += 14; banner('CADUTO!', 'Il Rocchetto è a terra: riprendilo', 1.2, '#ff5a6a'); } }
+const carrying = () => (G.event && G.event.kind === 'escort' && G.event.carried) || null;
 
 function drawEvent(c) {
   const ev = G.event;
@@ -495,7 +500,7 @@ function drawEvent(c) {
     G.lights.push({ x: ev.ax, y: ev.ay, r: 28, col: '#ffd23f' });
   } else if (ev.kind === 'encounter') {
     const ch = CHARS[ev.npc];
-    drawSpr(c, ch.spr, ev.x, ev.y, ev.x > G.p.x);
+    drawSpr(c, ch.spr + '_i' + (Math.sin(G.t * 2.6) > 0 ? 1 : 0), ev.x, ev.y, ev.x > (G.center || G.p).x);
     txt(c, '!', Math.round(ev.x - camX), Math.round(ev.y - camY - 22 + Math.sin(G.t * 5) * 2), '#ffd23f', 16, 'center');
     G.lights.push({ x: ev.x, y: ev.y, r: 34, col: '#5fb3ff' });
   } else if (ev.kind === 'bounty' && !ev.e.dead) {
@@ -529,8 +534,9 @@ function relicChoices(n) {
 function offerRelic() {
   const ids = relicChoices(2);
   if (!ids.length) { dropPickup('chest', G.p.x, G.p.y - 20); return; }
-  UI.openChoice('Una Reliquia del Multiverso', 'Scegline una: hanno trucchi che si combinano tra loro', ids.map(id => ({
-    icon: RELICS[id].icon, name: RELICS[id].name, line: RELICS[id].line(), act: () => giveRelic(id),
+  const pl = G.cur;
+  UI.openChoice('Una Reliquia del Multiverso', (coop() ? pl.label + ' · ' : '') + 'Scegline una: hanno trucchi che si combinano tra loro', ids.map(id => ({
+    icon: RELICS[id].icon, name: RELICS[id].name, line: RELICS[id].line(), act: () => withPl(pl, () => giveRelic(id)),
   })));
 }
 function giveRelic(id) {
@@ -539,11 +545,12 @@ function giveRelic(id) {
   banner('RELIQUIA: ' + RELICS[id].name.toUpperCase(), RELICS[id].line(), 2.2, '#ffd23f');
 }
 function offerGift(npc) {
+  const pl = G.cur;
   const opts = [
-    { icon: ['heart', '#e0303a', '#5a1e24'], name: 'Un po\' di riposo', line: 'Cura completa', act: () => { const p = G.p; if (G.char.hpMode === 'anxiety') p.hp = 0; else p.hp = p.maxHp - (p.hard || 0); } },
+    { icon: ['heart', '#e0303a', '#5a1e24'], name: 'Un po\' di riposo', line: coop() ? 'Cura completa per tutta la squadra' : 'Cura completa', act: () => { for (const q of G.players) withPl(q, () => { const p = G.p; if (G.char.hpMode === 'anxiety') p.hp = 0; else p.hp = p.maxHp - (p.hard || 0); }); } },
     { icon: ['star', '#ffd23f', '#8a5a2a'], name: 'Un consiglio', line: '+1 livello subito', act: () => { G.pendingLv++; } },
   ];
   const rel = relicChoices(1)[0];
-  if (rel) opts.push({ icon: RELICS[rel].icon, name: RELICS[rel].name, line: RELICS[rel].line(), act: () => giveRelic(rel) });
-  UI.openChoice('Il dono di ' + CHARS[npc].name, 'Scegli cosa accettare', opts);
+  if (rel) opts.push({ icon: RELICS[rel].icon, name: RELICS[rel].name, line: RELICS[rel].line(), act: () => withPl(pl, () => giveRelic(rel)) });
+  UI.openChoice('Il dono di ' + CHARS[npc].name, (coop() ? pl.label + ' · ' : '') + 'Scegli cosa accettare', opts);
 }

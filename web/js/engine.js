@@ -56,17 +56,18 @@ const GRID = {
 function nearest(x, y, r, filter) {
   let best = null, bd = Infinity;
   GRID.query(x, y, r, e => {
-    if (filter && !filter(e)) return;
+    if (e.prop || (filter && !filter(e))) return;
     const d = d2(x, y, e.x, e.y);
     if (d < bd) { bd = d; best = e; }
   });
   return best;
 }
 function enemiesIn(x, y, r) { const out = []; GRID.query(x, y, r, e => out.push(e)); return out; }
+function foesIn(x, y, r) { const out = []; GRID.query(x, y, r, e => { if (!e.prop) out.push(e); }); return out; }
 
 // Punto più affollato (per granate, incantesimi ad area…)
 function densest(x, y, r) {
-  const cand = enemiesIn(x, y, r);
+  const cand = foesIn(x, y, r);
   if (!cand.length) return null;
   let best = cand[0], bc = -1;
   for (let i = 0; i < Math.min(14, cand.length); i++) {
@@ -81,6 +82,7 @@ function densest(x, y, r) {
 function densestCardinal(x, y, r, min = 1) {
   const c = [0, 0, 0, 0];
   GRID.query(x, y, r, e => {
+    if (e.prop) return;
     const dx = e.x - x, dy = e.y - y;
     if (Math.abs(dx) >= Math.abs(dy)) c[dx >= 0 ? 0 : 1]++; else c[dy >= 0 ? 2 : 3]++;
   });
@@ -160,9 +162,8 @@ function sfx(name) {
 function recalc() {
   const c = G.char, p = G.p;
   const s = { might: 0.9, area: 1, cd: 1, speed: 1, magnet: 1, luck: 1, growth: 1, duration: 1, armor: c.armor || 0, hpMul: 1, hpAdd: 0, units: 0, anxMul: 1 };
-  const U = (typeof META !== 'undefined' && META.up) || {};
-  s.hpMul += 0.05 * (U.hp || 0); s.units += Math.floor((U.hp || 0) / 2); s.might += 0.04 * (U.might || 0); s.magnet += 0.15 * (U.magnet || 0);
-  s.speed += 0.03 * (U.speed || 0); s.growth += 0.05 * (U.growth || 0); s.luck += 0.06 * (U.luck || 0);
+  s.regen = 0; s.greed = 1; s.curse = 1;
+  if (typeof applyPowerUps === 'function') applyPowerUps(s);
   for (const it of G.passives) PASSIVES[it.id].stat?.(s, it.lvl);
   for (const it of G.charms) PASSIVES[it.id].stat?.(s, it.lvl);
   c.stats?.(s);
@@ -202,6 +203,7 @@ function hurtEnemy(e, dmg, o = {}) {
   if (o.freeze && !e.boss) { e.freezeT = Math.max(e.freezeT, o.freeze); }
   if (o.burn) { e.burnT = 2; e.burnD = o.burn; }
   G.dmgDealt += d;
+  if (G.cur && !e.prop) { G.cur.dmg += d; if (!o.ultSrc) G.p.ult = Math.min(100, (G.p.ult || 0) + Math.min(d, 60) * 0.0035); }
   e.onDamaged?.(e, d);
   G.char.postHit?.(e, d, o);
   if (G.passives.length && !o.relicEcho) relicOnHit(e, d, o);
@@ -215,7 +217,9 @@ function hurtEnemy(e, dmg, o = {}) {
 function killEnemy(e, o = {}) {
   if (e.dead) return;
   e.dead = true;
+  if (e.prop) { breakProp(e); return; }
   G.kills++;
+  if (G.cur) { G.cur.kills++; G.p.ult = Math.min(100, (G.p.ult || 0) + (e.boss ? 25 : e.elite ? 8 : 0.11)); }
   fxParticles(e.x, e.y, e.blood || '#cfc6b8', e.elite ? 18 : 5, 70, 0.35);
   if (!e.noXp) dropGem(e.x, e.y, e.xp);
   if (!e.elite && !e.boss) {
@@ -223,6 +227,7 @@ function killEnemy(e, o = {}) {
     if (Math.random() < 0.006 * luck) dropPickup('food', e.x, e.y);
     else if (Math.random() < 0.0025 * luck) dropPickup('yarn', e.x, e.y);
     else if (Math.random() < 0.003 * luck) dropPickup('strawberry', e.x, e.y);
+    else if (Math.random() < 0.0016 * luck) dropPickup(pick(['pk_rosary', 'pk_hourglass', 'pk_bomb', 'pk_purse', 'pk_ultorb']), e.x, e.y);
   }
   if (e.elite && !e.boss) { dropPickup('chest', e.x, e.y); G.elitesKilled++; }
   e.onDeath?.(e);
@@ -234,7 +239,7 @@ function killEnemy(e, o = {}) {
 // --- Danno al giocatore -------------------------------------------------------------
 function hurtPlayer(amount, src) {
   const p = G.p;
-  if (p.invuln > 0 || G.over || SET.assist || MODE !== 'play') return;
+  if (p.invuln > 0 || G.over || SET.assist || MODE !== 'play' || (G.cur && G.cur.down) || p.ultInv > 0) return;
   if (src && src.weakT > 0) amount *= 0.7;
   amount *= G.dmgTakenMul;
   if (G.char.preHurt && G.char.preHurt(amount, src) === false) return;
@@ -260,13 +265,14 @@ function hurtPlayer(amount, src) {
     G.char.onHurt?.(amount);
   }
   p.invuln = G.char.iframes || 0.6;
+  p.ult = Math.min(100, (p.ult || 0) + 2.5);
   G.hitT = 0;
   eventHurt();
   G.hurtFlash = 0.15;
   { const low = mode === 'anxiety' ? p.hp > 70 : p.hp < p.maxHp * 0.35; if (low && (G.barkLowT || 0) < G.t) { G.barkLowT = G.t + 15; bark('low'); } }
   shake(3);
   sfx('hurt');
-  fxParticles(p.x, p.y, '#ff4a5a', 8, 80, 0.3);
+  fxParticles(p.x, p.y, coop() ? G.cur.col : '#ff4a5a', 8, 80, 0.3);
   if (mode === 'anxiety') { if (p.hp >= 100) G.char.panic(); }
   else if (p.hp <= 0) killPlayer();
 }
@@ -282,21 +288,22 @@ function healPlayer(n) {
 
 function killPlayer() {
   if (G.char.onDeath && G.char.onDeath()) return;
-  endRun(false);
+  downPlayer();
 }
 
 // --- Nemici ---------------------------------------------------------------------------
 function spawnEnemy(type, x, y, extra = {}) {
   const T = ETYPES[type];
-  const sc = 1 + G.t / 240 + G.nodes * 0.15;
+  const n = G.players ? G.players.length : 1;
+  const sc = (1 + G.t / 270 + G.nodes * 0.22) * (1 + 0.55 * (n - 1)) * (G.curse || 1);
   const e = {
     type, x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: T.r, spr: T.spr,
-    hp: T.hp * (T.boss ? 1 : sc), maxHp: 0, spd: T.spd * (1 + Math.min(0.3, G.t / 1400)) * (owned('pact') ? 1.15 : 1), dmg: T.dmg * 0.8 * (1 + G.t / 700),
+    hp: T.hp * (T.boss ? 1 : sc), maxHp: 0, spd: T.spd * (1 + Math.min(0.3, G.t / 1400)) * (owned('pact') ? 1.15 : 1) * (1 + ((G.curse || 1) - 1) * 0.5), dmg: T.dmg * 0.8 * (1 + G.t / 800 + G.nodes * 0.1),
     xp: T.xp, elite: !!T.elite, boss: !!T.boss, kbRes: T.kbRes || (T.elite ? 0.8 : 0), blood: T.blood,
     flash: 0, stun: 0, slow: 0, slowT: 0, freezeT: 0, burnT: 0, burnD: 0, doomT: 0, chill: 0, weakT: 0, t: 0,
     ai: T.ai || AI.chase, draw: T.draw, hitT: 0, ...extra,
   };
-  if (T.boss) e.hp = T.hp * (0.6 + Math.min(G.level, 40) * 0.02) * (1 + G.nodes * 0.2);
+  if (T.boss) e.hp = T.hp * (0.6 + Math.min(G.level, 60) * 0.02) * (1 + G.nodes * 0.35) * (1 + 0.5 * (n - 1)) * (G.curse || 1) * (G.mode === 'story' && T.boss && G.times ? 1 + Math.max(0, segT() - 360) / 600 : 1);
   e.maxHp = e.hp;
   T.init?.(e);
   G.enemies.push(e);
@@ -304,9 +311,11 @@ function spawnEnemy(type, x, y, extra = {}) {
 }
 
 function updateEnemies(dt) {
-  const p = G.p;
+  const lp = G.p, multi = coop();
+  let p = lp, tgt = G.cur;
   for (const e of G.enemies) {
     if (e.dead) continue;
+    if (multi) { tgt = e.prop ? G.cur : nearestPl(e.x, e.y); p = tgt.p; }
     e.t += dt;
     if (e.flash > 0) e.flash -= dt;
     if (e.lastSrcT > 0) e.lastSrcT -= dt;
@@ -328,7 +337,8 @@ function updateEnemies(dt) {
     }
     let mv = 1;
     if (e.slowT > 0) { e.slowT -= dt; mv *= 1 - e.slow; } else e.slow = 0;
-    if (G.auraSlow && d2(e.x, e.y, p.x, p.y) < G.auraSlow.r * G.auraSlow.r) mv *= 1 - G.auraSlow.v;
+    if (multi) { for (const pl of G.players) { const A = pl === G.cur ? G.auraSlow : pl.auraSlow; if (A && !pl.down && d2(e.x, e.y, pl.p.x, pl.p.y) < A.r * A.r) { mv *= 1 - A.v; break; } } }
+    else if (G.auraSlow && d2(e.x, e.y, p.x, p.y) < G.auraSlow.r * G.auraSlow.r) mv *= 1 - G.auraSlow.v;
     if (e.freezeT > 0) { e.freezeT -= dt; mv = 0; }
     if (e.stun > 0) { e.stun -= dt; mv = 0; }
     if (e.pull) {
@@ -337,7 +347,8 @@ function updateEnemies(dt) {
       if (d2(e.x, e.y, p.x, p.y) < 18 * 18 || (e.pull.t -= dt) <= 0) { const cb = e.pull.cb; e.pull = null; cb?.(e); }
       continue;
     }
-    if (mv > 0) e.ai(e, dt);
+    // l'IA "vede" come G.p il giocatore più vicino (solo durante la sua mossa)
+    if (mv > 0 && !e.prop) { G.p = p; try { e.ai(e, dt); } finally { G.p = lp; } }
     e.x += (e.vx * mv + e.kx) * dt;
     e.y += (e.vy * mv + e.ky) * dt;
     const decay = Math.min(1, dt * 9);
@@ -366,7 +377,7 @@ function updateEnemies(dt) {
     // Contatto
     if (!e.harmless && e.stun <= 0 && e.freezeT <= 0 && !e.hidden) {
       const rr = e.r + p.r;
-      if (d2(e.x, e.y, p.x, p.y) < rr * rr) hurtPlayer(e.dmg, e);
+      if (d2(e.x, e.y, p.x, p.y) < rr * rr) { if (multi) withPl(tgt, () => hurtPlayer(e.dmg, e)); else hurtPlayer(e.dmg, e); }
     }
     // Riposizionamento di chi resta troppo indietro (come in VS)
     if (!e.elite && !e.boss && !e.anchored && d2(e.x, e.y, p.x, p.y) > 560 * 560) {
@@ -375,6 +386,7 @@ function updateEnemies(dt) {
       if (pos) { e.x = pos[0]; e.y = pos[1]; }
     }
   }
+  G.p = lp;
 }
 
 // --- Proiettili del giocatore ----------------------------------------------------------
@@ -474,10 +486,11 @@ function eShoot(x, y, ang, spd, dmg, o = {}) {
   G.eprojs.push(Object.assign({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r: 3, dmg, life: 4, col: '#ff5a6a', kind: 'orb' }, o));
 }
 function updateEProjs(dt) {
-  const p = G.p;
+  const multi = coop();
   for (const b of G.eprojs) {
     if (b.dead) continue;
     b.life -= dt;
+    const tgt = multi ? nearestPl(b.x, b.y) : G.cur, p = tgt ? tgt.p : G.p;
     if (b.homing) {
       const sp = Math.hypot(b.vx, b.vy);
       const [nx, ny] = norm(p.x - b.x, p.y - b.y);
@@ -487,44 +500,72 @@ function updateEProjs(dt) {
     if (b.life <= 0) { b.dead = true; continue; }
     for (const bl of G.blocks) if (d2(b.x, b.y, bl.x, bl.y) < 49) { b.dead = true; bl.hp -= 10; }
     const rr = b.r + p.r;
-    if (!b.dead && d2(b.x, b.y, p.x, p.y) < rr * rr) { b.dead = true; hurtPlayer(b.dmg, b); }
+    if (!b.dead && d2(b.x, b.y, p.x, p.y) < rr * rr && !(tgt && tgt.down)) { b.dead = true; if (multi) withPl(tgt, () => hurtPlayer(b.dmg, b)); else hurtPlayer(b.dmg, b); }
   }
 }
 
 // --- Gemme e pickup --------------------------------------------------------------------
+// Tier della gemma dal valore (come le gemme blu/verdi/rosse di VS)
+const gemTier = v => (v < 2.5 ? 0 : v < 8 ? 1 : v < 25 ? 2 : 3);
 function dropGem(x, y, v) {
-  v *= 1 + G.t / 240;
+  const base = v;
+  v *= 1 + G.t / 700;
   if (G.gems.length > 420) {
     const g = G.gems[Math.floor(Math.random() * G.gems.length)];
-    g.v += v; return;
+    g.v += v; g.b = (g.b || 0) + base; g.tier = gemTier(g.v); return;
   }
-  G.gems.push({ x: x + rnd(-3, 3), y: y + rnd(-3, 3), v, fly: false, vx: 0, vy: 0 });
+  // in co-op ogni frammento prende la forma della valuta di uno dei giocatori
+  const st = G.players && G.players.length > 1 ? pick(G.players).char.gem : G.char.gem;
+  G.gems.push({ x: x + rnd(-3, 3), y: y + rnd(-3, 3), v, b: base, tier: gemTier(v), st, fly: false, ph: rnd(TAU) });
 }
 function dropPickup(kind, x, y, extra = {}) { G.pickups.push(Object.assign({ kind, x, y, t: 0 }, extra)); }
 
-function xpNeed(n) { return 6 + 8 * n + 0.45 * n * n; }
+// Curva dell'esperienza (Alfa 4, sul modello di Vampire Survivors):
+// +10 per livello fino al 20, +13 fino al 40, poi +16.
+function xpNeed(n) {
+  if (n < 20) return 5 + 10 * (n - 1);
+  if (n < 40) return 195 + 13 * (n - 20);
+  return 455 + 16 * (n - 40);
+}
+// Livello "atteso" per il minuto della run: se sei indietro i frammenti valgono di
+// più, se sei molto avanti valgono meno. Così la crescita resta leggibile in 20 min.
+function expectedLevel(t) { return 4 + t * 0.072 - t * t * 0.0000165; }
+function xpBand() {
+  const t = G.mode === 'endless' ? Math.min(G.t, 1500) : G.t;
+  const d = expectedLevel(t) - G.level;
+  return clamp(1 + d * 0.08, 0.15, 1.8);
+}
+
+function gainXp(v, base) {
+  const add = v * G.s.growth * (G.char.xpMul ? G.char.xpMul() : 1) * (G.xpEventMul || 1) * (owned('pact') && owned('collector') ? 1.15 : 1) * xpBand() * (G.curse || 1);
+  G.xp += add;
+  G.thread += (base ?? v) * 0.1 * (G.s.greed || 1);
+}
 
 function updateGems(dt) {
-  const p = G.p;
-  const mag = 50 * G.s.magnet;
+  const multi = coop();
+  const pls = multi ? alivePls() : [G.cur];
   for (const g of G.gems) {
     if (g.dead) continue;
-    const dd = d2(g.x, g.y, p.x, p.y);
-    if (!g.fly && dd < mag * mag) g.fly = true;
-    if (g.fly) {
-      // Inseguimento diretto: velocità scalare crescente, nessuna inerzia laterale
-      // (prima la velocità si accumulava e le gemme orbitavano intorno al giocatore).
-      g.spd = Math.min(560, (g.spd || 60) + 1100 * dt);
-      const d = Math.sqrt(dd), step = g.spd * dt;
-      if (d <= step + p.r + 4) { g.x = p.x; g.y = p.y; }
-      else { g.x += (p.x - g.x) / d * step; g.y += (p.y - g.y) / d * step; }
-      if (d <= step + p.r + 4) {
-        g.dead = true;
-        G.thread += g.v * 0.15; G.gemsTaken = (G.gemsTaken || 0) + 1;
-        G.xp += g.v * G.s.growth * (G.char.xpMul ? G.char.xpMul() : 1) * (G.xpEventMul || 1) * (owned('pact') && owned('collector') ? 1.15 : 1);
-        sfx('pick');
+    if (!g.fly) {
+      for (const pl of pls) {
+        const s = pl === G.cur ? G.s : pl.s, mag = 50 * (s ? s.magnet : 1);
+        if (d2(g.x, g.y, pl.p.x, pl.p.y) < mag * mag) { g.fly = true; g.to = pl; break; }
       }
+      if (!g.fly) continue;
     }
+    // Inseguimento diretto: velocità scalare crescente, nessuna inerzia laterale
+    const to = g.to && !g.to.down ? g.to : (multi ? nearestPl(g.x, g.y) : G.cur);
+    g.to = to;
+    const p = to.p;
+    g.spd = Math.min(560, (g.spd || 60) + 1100 * dt);
+    const dd = d2(g.x, g.y, p.x, p.y), d = Math.sqrt(dd), step = g.spd * dt;
+    if (d <= step + p.r + 4) {
+      g.dead = true;
+      G.gemsTaken = (G.gemsTaken || 0) + 1;
+      if (multi && to !== G.cur) withPl(to, () => gainXp(g.v, g.b)); else gainXp(g.v, g.b);
+      sfx('pick');
+    } else { g.x += (p.x - g.x) / d * step; g.y += (p.y - g.y) / d * step; }
   }
   while (G.xp >= G.xpNext) {
     G.xp -= G.xpNext; G.level++; G.xpNext = xpNeed(G.level); G.pendingLv++;
@@ -534,7 +575,14 @@ function updateGems(dt) {
     k.t += dt;
     k.update?.(k, dt);
     if (k.life !== undefined && (k.life -= dt) <= 0) { k.dead = true; continue; }
-    if (d2(k.x, k.y, p.x, p.y) < (p.r + 7) * (p.r + 7)) collectPickup(k);
+    if (k.fly) {
+      const p = (k.to && !k.to.down ? k.to : G.cur).p;
+      const [nx, ny] = norm(p.x - k.x, p.y - k.y); k.spd = Math.min(400, (k.spd || 80) + 700 * dt);
+      k.x += nx * k.spd * dt; k.y += ny * k.spd * dt;
+    }
+    for (const pl of pls) {
+      if (d2(k.x, k.y, pl.p.x, pl.p.y) < (pl.p.r + 7) * (pl.p.r + 7)) { if (pl === G.cur) collectPickup(k); else withPl(pl, () => collectPickup(k)); break; }
+    }
   }
 }
 
@@ -551,7 +599,7 @@ function collectPickup(k) {
       break;
     case 'yarn':
       k.dead = true;
-      for (const g of G.gems) g.fly = true;
+      for (const g of G.gems) { g.fly = true; g.to = G.cur; }
       banner('GOMITOLO', 'Tutti i frammenti arrivano a te', 1.2, '#f2a0b8');
       break;
     case 'chest':
@@ -560,6 +608,43 @@ function collectPickup(k) {
       k.dead = true; G.straw++;
       fxText(k.x, k.y - 10, 'FRAGOLA! (non serve a nulla)', '#ff7a8a', 1.2);
       sfx('pick');
+      break;
+    case 'pk_rosary':
+      k.dead = true;
+      for (const e of G.enemies) if (!e.boss && !e.elite && !e.prop && !e.anchored && d2(e.x, e.y, p.x, p.y) < 420 * 260) { fxParticles(e.x, e.y, '#ffe680', 3, 50, 0.4); killEnemy(e, { src: 'rosary' }); }
+      G.flashW = 0.6; shake(4); sfx('bell');
+      banner('ROSARIO DELLE LACRIME', 'Lo schermo è stato purificato', 1.6, '#ffe680');
+      break;
+    case 'pk_hourglass':
+      k.dead = true;
+      for (const e of G.enemies) if (!e.prop) e.freezeT = Math.max(e.freezeT, e.boss ? 1.5 : 6);
+      G.eprojs = [];
+      banner('CLESSIDRA DI CRONO', 'Il tempo si ferma per tutti, tranne che per te', 1.6, '#9fdcff'); sfx('bell');
+      break;
+    case 'pk_bomb':
+      k.dead = true;
+      setTimeout(() => { if (!G || G.over) return; aoe(k.x, k.y, 90, 160, { kb: 320, src: 'bomb' }, '#ffb03a'); fxParticles(k.x, k.y, '#ffb03a', 40, 180, 0.6, 2); shake(8); sfx('boom'); }, 450);
+      fxText(k.x, k.y - 12, 'BOMBA!', '#ffb03a', 0.6);
+      break;
+    case 'pk_purse': case 'pk_purse_big': {
+      k.dead = true;
+      const n = k.kind === 'pk_purse' ? 25 : 80;
+      G.thread += n * (G.s.greed || 1);
+      fxText(k.x, k.y - 10, '+' + Math.round(n * (G.s.greed || 1)) + ' FILO', '#e2b04a', 0.9); sfx('pick');
+      break;
+    }
+    case 'pk_ultorb':
+      k.dead = true; p.ult = Math.min(100, (p.ult || 0) + 35);
+      fxText(k.x, k.y - 10, 'ULTIMATE +35%', '#fff2b0', 0.9); fxRing(p.x, p.y, 4, 26, '#fff2b0', 0.4, 2); sfx('pick');
+      break;
+    case 'pk_revive':
+      k.dead = true; p.revives = (p.revives || 0) + 1;
+      fxText(k.x, k.y - 10, 'AGO D\'ORO: +1 RIANIMAZIONE', '#ffd23f', 1.1); sfx('evo');
+      break;
+    case 'pk_magnet':
+      k.dead = true;
+      for (const g of G.gems) { g.fly = true; g.to = G.cur; }
+      banner('CALAMITA DA SARTA', 'Tutti i frammenti arrivano a te', 1.2, '#e2b04a');
       break;
     default:
       if (G.char.onPickup?.(k)) k.dead = true;
@@ -617,7 +702,8 @@ function endRun(win, reason) {
   G.reason = reason;
   MODE = 'end';
   META.thread += Math.floor(G.thread);
-  if (win && G.mode === 'story') { META.beaten[G.stage.id] = true; if (G.stage.id === 'finale') META.storyDone[G.char.id] = true; }
+  if (win && G.mode === 'story') { META.beaten[G.stage.id] = true; if (G.stage.id === 'finale') for (const pl of G.players || [{ char: G.char }]) META.storyDone[pl.char.id] = true; }
+  if (G.mode === 'endless') { META.endlessBest = Math.max(META.endlessBest || 0, G.loop || 0); META.endlessTime = Math.max(META.endlessTime || 0, Math.floor(G.t)); }
   saveMeta();
   if (win) {
     try {

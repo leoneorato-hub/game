@@ -233,6 +233,62 @@ body.in-menu #touch-ui { display: none; }
 .rc-sep { border-top: 1px dashed #6a5a4a; margin: 6px 0; }
 .rc-foot { text-align: center; margin-top: 10px; font-size: 12px; }
 
+/* ---- Alfa 4: scelte grandi, lobby co-op, Merceria a schede ---- */
+.big-start { font-size: 20px; justify-content: center !important; padding: 14px 18px; animation: pulse-start 1.6s ease-in-out infinite; }
+@keyframes pulse-start { 50% { box-shadow: 0 3px 0 var(--ink), 0 0 22px rgba(226,176,74,.45); } }
+@media (prefers-reduced-motion: reduce) { .big-start { animation: none; } }
+.big-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.big-choice { background: var(--cloth); border: 2px solid var(--ink); padding: 0 0 14px; display: grid; gap: 8px; text-align: left; box-shadow: 0 4px 0 rgba(0,0,0,.35); transition: transform .14s, background .14s; }
+.big-choice:hover, .big-choice:focus-visible { transform: translateY(-4px); background: var(--cloth-2); outline: 1px dashed var(--gold); outline-offset: -6px; }
+.big-choice .bc-art { width: 100%; aspect-ratio: 16 / 9; height: auto; image-rendering: pixelated; border-bottom: 2px dashed var(--thread); background: #120c16; }
+.bc-name { font-family: var(--display); font-size: 20px; color: var(--thread); padding: 0 14px; }
+.bc-name small { font-size: 12px; color: var(--muted); }
+.bc-line { padding: 0 14px; font-size: 15px; }
+.bc-meta { padding: 0 14px; font-size: 13px; color: var(--gold); }
+#lobby-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.lobby-slot { background: var(--cloth); border: 2px solid var(--ink); padding: 12px; display: grid; justify-items: center; gap: 6px; text-align: center; min-height: 250px; align-content: start; position: relative; transition: transform .15s; }
+.lobby-slot.joined { border-color: var(--pc); box-shadow: inset 0 0 0 1px var(--pc), 0 4px 0 rgba(0,0,0,.35); }
+.lobby-slot.ready { background: linear-gradient(180deg, color-mix(in srgb, var(--pc) 22%, transparent), transparent 70%), var(--cloth); }
+.lobby-slot.ready::after { content: "PRONTO"; position: absolute; top: 8px; right: 8px; font-family: var(--display); font-size: 10px; background: var(--pc); color: var(--ink); padding: 1px 5px; }
+.lobby-slot.bump { animation: pop .25s ease-out; }
+.lobby-slot .ls-label { font-family: var(--display); font-size: 18px; color: var(--pc, var(--muted)); }
+.lobby-slot canvas { width: 96px; height: 112px; image-rendering: pixelated; }
+.lobby-slot .ls-name { font-family: var(--display); font-size: 13px; }
+.lobby-slot .ls-dev, .lobby-slot .ls-hint { font-size: 13px; color: var(--muted); }
+.lobby-slot .ls-arrows { font-family: var(--display); color: var(--thread); }
+.lobby-help { margin-top: 12px; font-size: 14px; color: var(--muted); display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; }
+.lobby-help b { color: var(--paper); font-family: var(--display); font-size: 11px; }
+.shop-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.shop-tab { font-family: var(--display); font-size: 12px; background: var(--ink); border: 2px solid var(--ink); color: var(--muted); padding: 7px 12px; }
+.shop-tab.on { background: var(--crimson); color: var(--paper); }
+.shop-tab:hover, .shop-tab:focus-visible { color: var(--paper); outline: 1px dashed var(--gold); outline-offset: -5px; }
+.shop-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+@media (max-width: 760px) { .shop-body { grid-template-columns: 1fr; } }
+#shop-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)) !important; gap: 8px !important; }
+.pu-tile { position: relative; background: var(--cloth); border: 2px solid var(--ink); padding: 10px 4px 8px; display: grid; justify-items: center; gap: 5px; transition: transform .12s; }
+.pu-tile img { width: 48px; height: 48px; image-rendering: pixelated; }
+.pu-tile .pu-n { font-family: var(--display); font-size: 9px; text-align: center; line-height: 1.2; min-height: 2.4em; }
+.pu-tile.is-sel, .pu-tile:hover, .pu-tile:focus-visible { transform: translateY(-3px); background: var(--cloth-2); outline: 1px dashed var(--gold); outline-offset: -5px; }
+.pu-tile.maxed { box-shadow: inset 0 0 0 2px rgba(255,210,63,.45); }
+.pu-tile.owned::after { content: "✓"; position: absolute; top: 3px; right: 6px; color: var(--gold); }
+.pu-tile.locked img { filter: grayscale(1) brightness(.6); }
+.pu-tile.buy { animation: buy .45s ease-out; }
+@keyframes buy { 30% { transform: scale(1.12); box-shadow: 0 0 22px rgba(255,210,63,.7); } }
+#shop-detail { background: rgba(0,0,0,.28); border: 2px solid var(--ink); padding: 14px; display: grid; gap: 8px; min-height: 260px; align-content: start; }
+#shop-detail img { width: 64px; height: 64px; image-rendering: pixelated; justify-self: center; }
+#shop-detail h3 { font-size: 15px; color: var(--thread); text-align: center; }
+#shop-detail .sd-from { font-size: 12px; color: var(--muted); text-align: center; }
+#shop-detail .sd-cost { font-family: var(--display); font-size: 13px; color: var(--gold); text-align: center; }
+#shop-detail .btn { justify-content: center; }
+.lore-list { display: grid; gap: 8px; }
+.lore-item { border-left: 3px solid var(--thread); background: rgba(0,0,0,.25); padding: 8px 10px; font-size: 15px; }
+.lore-item.locked { color: #6b6577; border-color: #3a2f3e; font-style: italic; }
+#t-ult { position: absolute; z-index: 4; right: max(96px, calc(env(safe-area-inset-right, 0px) + 96px)); bottom: max(18px, env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 50%; font-family: var(--display); font-size: 11px; background: rgba(226,176,74,.7); border: 2px solid var(--ink); color: var(--ink); touch-action: none; }
+.lv-card.grp-arma { border-top: 4px solid #c9a050; } .lv-card.grp-arma .lv-tag { color: #e2b04a; }
+.lv-card.grp-supporto { border-top: 4px solid #5fbfb6; } .lv-card.grp-supporto .lv-tag { color: #7ad0c8; }
+.tm-pl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 18px; border-top: 2px dashed var(--pc); padding-top: 8px; }
+#lv-title .lv-who { display: block; font-size: 14px; margin-top: 4px; }
+
 /* Dialoghi */
 #dlg { position: absolute; left: 50%; bottom: max(14px, 3vh); transform: translateX(-50%); width: min(820px, calc(100% - 32px)); z-index: 8; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: stretch; background: rgba(20,14,24,.96); border: 2px solid var(--ink); outline: 1px dashed var(--vc, var(--thread)); outline-offset: -6px; padding: 12px; cursor: pointer; animation: slide-in .2s ease-out; }
 #dlg.right { grid-template-columns: minmax(0, 1fr) 96px; }
@@ -256,16 +312,16 @@ body.in-menu #touch-ui { display: none; }
   <div id="touch-ui">
     <button id="t-ability" type="button" aria-label="Abilità">ABILITÀ</button>
     <button id="t-pause" type="button" aria-label="Pausa">II</button>
+    <button id="t-ult" type="button" aria-label="Ultimate">ULT</button>
   </div>
 
   <div id="ui">
     <!-- TITOLO -->
     <section id="s-title" class="screen" hidden>
       <div class="logo-wrap"><h1 class="logo"><span>PATCHWORK</span><br><span style="color:var(--thread)">ETERNITY</span></h1><span id="splash"></span></div>
-      <p class="sub">Survivors of the Stitched Multiverse · Alfa 0.3</p>
+      <p class="sub">Survivors of the Stitched Multiverse · Alfa 0.4</p>
       <div class="title-menu">
-        <button id="b-story" class="btn primary nav" type="button"><span class="spool"></span>Storia: la Scala dei Finali</button>
-        <button id="b-extra" class="btn nav" type="button"><span class="spool"></span>Toppe Extra</button>
+        <button id="b-start" class="btn primary nav big-start" type="button"><span class="spool"></span>INIZIA</button>
         <button id="b-shop" class="btn nav" type="button"><span class="spool"></span>Merceria di Sor Ditale</button>
         <button id="b-controls" class="btn nav" type="button"><span class="spool"></span>Comandi</button>
         <button id="b-options" class="btn nav" type="button"><span class="spool"></span>Opzioni</button>
@@ -274,6 +330,40 @@ body.in-menu #touch-ui { display: none; }
       <p id="title-tip"></p>
       <p class="rotate-hint">Ruota il telefono in orizzontale per giocare meglio.</p>
       <p class="foot">Concept fan-made non ufficiale. Personaggi e mondi appartengono ai rispettivi autori: Team Cherry, New Blood / Arsi Patala, Supergiant Games, Maddy Makes Games, Motion Twin / Evil Empire, The Game Kitchen, Re-Logic, Edmund McMillen.</p>
+    </section>
+
+    <!-- GIOCATORI: SINGOLO O CO-OP -->
+    <section id="s-players" class="screen patch" hidden>
+      <div class="head-row"><h2>Chi gioca?</h2><span class="muted">Frecce/WASD · INVIO · ESC per tornare</span></div>
+      <div class="big-choices">
+        <button id="b-single" class="big-choice nav" type="button"><canvas class="bc-art" width="160" height="90" data-art="single"></canvas><span class="bc-name">Singolo</span><span class="bc-line">Un eroe, tutta la coperta da ricucire. Tastiera, gamepad o touch.</span></button>
+        <button id="b-coop" class="big-choice nav" type="button"><canvas class="bc-art" width="160" height="90" data-art="coop"></canvas><span class="bc-name">Co-op locale <small>2–4</small></span><span class="bc-line">Sullo stesso schermo: fino a 4 tastiere/gamepad. Esperienza condivisa, ognuno sceglie i suoi potenziamenti. I compagni a terra si rianimano restandogli vicino.</span></button>
+      </div>
+      <div class="row" style="margin-top:16px"><button class="btn nav" type="button" onclick="UI.openTitle()">← Indietro</button></div>
+    </section>
+
+    <!-- MODALITÀ -->
+    <section id="s-modes" class="screen patch" hidden>
+      <div class="head-row"><h2>Modalità</h2><span class="muted" id="modes-who"></span></div>
+      <div class="big-choices">
+        <button id="b-m-story" class="big-choice nav" type="button"><canvas class="bc-art" width="160" height="90" data-art="story"></canvas><span class="bc-name">Storia <small>20 min a capitolo</small></span><span class="bc-line">La Scala dei Finali: un capitolo per ogni gioco. Mini-boss al 5', un intruso da un altro mondo al 10', mini-boss rinforzato al 15', boss finale al 18'. Batti il boss per ricucire il capitolo.</span><span class="bc-meta" id="m-story-meta"></span></button>
+        <button id="b-m-endless" class="big-choice nav" type="button"><canvas class="bc-art" width="160" height="90" data-art="endless"></canvas><span class="bc-name">Endless <small>Il Telaio Infinito</small></span><span class="bc-line">I mondi si susseguono senza fine, sempre più difficili: mini-boss e boss ogni 5 minuti. Ogni boss battuto strappa alla Cucitrice una Memoria: scopri perché il Telaio non vuole finire.</span><span class="bc-meta" id="m-endless-meta"></span></button>
+      </div>
+      <div class="row" style="margin-top:16px;justify-content:space-between">
+        <button class="btn nav" type="button" onclick="UI.openPlayers()">← Indietro</button>
+        <button id="b-m-extra" class="btn nav" type="button">Toppe classiche (6–10 min)</button>
+      </div>
+    </section>
+
+    <!-- LOBBY CO-OP -->
+    <section id="s-lobby" class="screen patch" hidden>
+      <div class="head-row"><h2>Co-op: entrate nella coperta</h2><span class="muted">Premi il tasto abilità del tuo dispositivo per entrare · ◀ ▶ cambia eroe · abilità = PRONTO · ESC esce</span></div>
+      <div id="lobby-slots"></div>
+      <div id="lobby-help" class="lobby-help"></div>
+      <div class="row" style="margin-top:14px;justify-content:space-between">
+        <button class="btn nav" type="button" onclick="UI.openPlayers()">← Indietro</button>
+        <span id="lobby-status" class="gold"></span>
+      </div>
     </section>
 
     <!-- PERSONAGGI -->
@@ -297,7 +387,7 @@ body.in-menu #touch-ui { display: none; }
 
     <!-- STORIA -->
     <section id="s-story" class="screen patch" hidden>
-      <div class="head-row"><h2>La Scala dei Finali</h2><span class="muted">Con <b id="story-who"></b> · ogni capitolo: mini-boss a 2:30, boss finale a 5:00</span></div>
+      <div class="head-row"><h2 id="story-title">La Scala dei Finali</h2><span class="muted">Con <b id="story-who"></b> · <span id="story-rule">ogni capitolo dura 20 minuti: mini-boss al 5', intruso al 10', mini-boss rinforzato al 15', boss al 18'</span></span></div>
       <p class="muted" style="margin-bottom:12px">Alfa: tutti i capitoli sono aperti. I capitoli ricuciti restano segnati con ✓. Battere la Cucitrice nel Finale mostra il finale del personaggio.</p>
       <div id="story-list"></div>
       <div class="row" style="margin-top:16px"><button class="btn nav" type="button" onclick="UI.openChars()">← Personaggi</button></div>
@@ -314,9 +404,17 @@ body.in-menu #touch-ui { display: none; }
     <section id="s-shop" class="screen patch" hidden>
       <div class="head-row"><h2>Merceria di Sor Ditale</h2><span class="gold">Filo: <b id="shop-thread"></b></span></div>
       <div class="shop-head"><canvas id="shop-portrait" width="96" height="96"></canvas><div class="voice-box" style="--vc:#e2b04a"><b>Sor Ditale</b><span id="shop-voice"></span></div></div>
-      <div id="shop-grid"></div>
-      <p class="muted" style="margin-top:12px">Il Filo si guadagna in ogni run, anche perdendo. I potenziamenti valgono per tutti i personaggi.</p>
-      <div class="row" style="margin-top:12px"><button class="btn nav" type="button" onclick="UI.openTitle()">← Indietro</button></div>
+      <div class="shop-tabs" role="tablist">
+        <button id="tab-pu" class="shop-tab nav" type="button" role="tab">Potenziamenti</button>
+        <button id="tab-ult" class="shop-tab nav" type="button" role="tab">Ultimate</button>
+        <button id="tab-lore" class="shop-tab nav" type="button" role="tab">Memorie del Telaio</button>
+      </div>
+      <div class="shop-body">
+        <div id="shop-grid"></div>
+        <aside id="shop-detail" class="patch-in"></aside>
+      </div>
+      <p class="muted" style="margin-top:12px">Il Filo si guadagna in ogni run, anche perdendo. I potenziamenti valgono per tutti i personaggi; il prezzo sale un po' a ogni acquisto, come in Vampire Survivors.</p>
+      <div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn nav" type="button" onclick="UI.openTitle()">← Indietro</button><button id="b-refund" class="btn nav" type="button">Rimborsa tutto</button></div>
     </section>
 
     <!-- COMANDI -->
@@ -328,7 +426,8 @@ body.in-menu #touch-ui { display: none; }
           <tbody>
             <tr><td>Muoviti</td><td><kbd>WASD</kbd> / <kbd>Frecce</kbd></td><td>Levetta sinistra</td><td>Trascina a sinistra</td></tr>
             <tr><td>Abilità del personaggio</td><td><kbd>SPAZIO</kbd></td><td><kbd>A</kbd></td><td>Pulsante ABILITÀ</td></tr>
-            <tr><td>V1: cambia arma</td><td><kbd>Q</kbd></td><td>—</td><td>Automatico</td></tr>
+            <tr><td><b>Ultimate</b> (anello del ritratto pieno)</td><td><kbd>E</kbd></td><td><kbd>Y</kbd></td><td>Pulsante ULT</td></tr>
+            <tr><td>V1: cambia arma</td><td><kbd>Q</kbd></td><td><kbd>X</kbd> / dorsali</td><td>Automatico</td></tr>
             <tr><td>Avanza nei dialoghi</td><td><kbd>SPAZIO</kbd> / <kbd>INVIO</kbd> (<kbd>ESC</kbd> salta)</td><td><kbd>A</kbd></td><td>Tocca il riquadro</td></tr>
             <tr><td>Pausa e Mappa delle Trame</td><td><kbd>ESC</kbd> / <kbd>P</kbd> / <kbd>TAB</kbd></td><td><kbd>Start</kbd></td><td>Pulsante II</td></tr>
             <tr><td>Scegli potenziamento</td><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> o frecce + <kbd>INVIO</kbd></td><td>Croce + <kbd>A</kbd></td><td>Tocca la toppa</td></tr>
@@ -338,6 +437,17 @@ body.in-menu #touch-ui { display: none; }
           </tbody>
         </table></div>
         <div class="tbl-wrap"><table>
+          <thead><tr><th>Co-op</th><th>Muovi</th><th>Abilità</th><th>Ultimate</th><th>Cambia arma</th></tr></thead>
+          <tbody>
+            <tr><td>Tastiera A</td><td><kbd>WASD</kbd></td><td><kbd>SPAZIO</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td></tr>
+            <tr><td>Tastiera B</td><td><kbd>Frecce</kbd></td><td><kbd>INVIO</kbd> / <kbd>SHIFT dx</kbd></td><td><kbd>CTRL dx</kbd> / <kbd>/</kbd></td><td><kbd>.</kbd></td></tr>
+            <tr><td>Tastiera C</td><td><kbd>IJKL</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>Y</kbd></td></tr>
+            <tr><td>Tastierino</td><td><kbd>8 4 5 6</kbd></td><td><kbd>0</kbd></td><td><kbd>INVIO</kbd></td><td><kbd>,</kbd></td></tr>
+            <tr><td>Gamepad 1–4</td><td>Levetta</td><td><kbd>A</kbd></td><td><kbd>Y</kbd></td><td><kbd>X</kbd></td></tr>
+          </tbody>
+        </table>
+        <p class="muted" style="font-size:14px;margin-top:6px">In co-op l'esperienza è condivisa: a ogni livello sceglie un giocatore alla volta (il titolo dice chi). Un compagno a terra si rianima restandogli vicino per 2,5 secondi. Se cadete tutti, la run finisce.</p></div>
+        <div class="tbl-wrap"><table>
           <thead><tr><th>Personaggio</th><th>Abilità</th><th>Cosa fa</th></tr></thead>
           <tbody id="ability-table"></tbody>
         </table></div>
@@ -346,7 +456,10 @@ body.in-menu #touch-ui { display: none; }
       <ul style="font-size:15px">
         <li><b>Cerchi e linee rosse</b> che si chiudono sono attacchi in arrivo: esci dall'area prima che si riempiano.</li>
         <li><b>Eventi</b>: il pannello a destra e una freccia dorata indicano l'obiettivo (cerchio da cucire, Rocchetto d'Oro da consegnare, personaggio da incontrare, taglia da prendere).</li>
-        <li>In basso a sinistra: l'<b>anello delle armi</b>. Fili colorati = sinergie attive; filo dorato pulsante = Ricucitura pronta (apri uno Strappo).</li>
+        <li>In alto a sinistra: la fila <b>ARMI</b> (attaccano da sole; i pallini sono i livelli, cornice d'oro = livello massimo, bordo pulsante = Ricucitura pronta: apri uno Strappo) e la fila <b>SUPPORTO</b> (passivi, amuleti e reliquie che potenziano tutto il resto).</li>
+        <li>In basso a sinistra: il <b>ritratto</b>. L'anello intorno si riempie con l'<b>Ultimate</b> (si compra nella Merceria): quando lampeggia premi <kbd>E</kbd>.</li>
+        <li><b>Oggetti a terra</b>: lanterne, urne e vasi si rompono e lasciano cibo, Filo o oggetti speciali (Rosario: pulisce lo schermo · Clessidra: ferma il tempo · Bomba · Calamita · Sfera dell'Ultimate · Ago d'Oro: una rianimazione).</li>
+        <li><b>Frammenti d'esperienza</b>: ogni eroe raccoglie la valuta del suo mondo (Geo, sangue, Oscurità, cristalli, Cellule, Lacrime, monete, centesimi) in 4 grandezze. Se sei indietro rispetto al minuto della run valgono di più; se sei molto avanti, un po' meno.</li>
         <li>Le <b>Reliquie del Multiverso</b> (bordo dorato) hanno trucchi che si combinano tra loro.</li>
       </ul>
       <div class="row" style="margin-top:16px"><button id="b-controls-back" class="btn nav" type="button">← Indietro</button></div>
@@ -422,11 +535,21 @@ body.in-menu #touch-ui { display: none; }
 <script src="js/art_heroes.js"></script>
 <script src="js/art_world.js"></script>
 <script src="js/art_fx.js"></script>
+<script src="js/art4_heroes_a.js"></script>
+<script src="js/art4_heroes_b.js"></script>
+<script src="js/art4_heroes_c.js"></script>
+<script src="js/art4_bosses_a.js"></script>
+<script src="js/art4_bosses_b.js"></script>
+<script src="js/art4_items.js"></script>
 <script src="js/stages.js"></script>
 <script src="js/bosses.js"></script>
 <script src="js/worlds.js"></script>
 <script src="js/story.js"></script>
 <script src="js/voices3.js"></script>
+<script src="js/coop.js"></script>
+<script src="js/shop.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/ultimates.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

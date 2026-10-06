@@ -41,19 +41,21 @@ function drawTeles(c) {
 }
 
 // --- Colpi verso il giocatore --------------------------------------------------------
+// (Alfa 4) colpiscono ogni giocatore vivo nell'area, non solo il primo
 function hitCircle(x, y, r, dmg, src) {
-  const p = G.p;
-  if (p.flyHigh > 0) return false;
-  if (d2(x, y, p.x, p.y) < (r + p.r) ** 2) { hurtPlayer(dmg, src); return true; }
-  return false;
+  let hit = false;
+  forPls(() => { hurtPlayer(dmg, src); hit = true; }, p => !(p.flyHigh > 0) && d2(x, y, p.x, p.y) < (r + p.r) ** 2);
+  return hit;
 }
 function hitLine(x1, y1, x2, y2, w, dmg, src) {
-  const p = G.p;
   const [dx, dy] = norm(x2 - x1, y2 - y1), len = Math.hypot(x2 - x1, y2 - y1);
-  const t = clamp((p.x - x1) * dx + (p.y - y1) * dy, 0, len);
-  const px = x1 + dx * t - p.x, py = y1 + dy * t - p.y;
-  if (px * px + py * py < (w + p.r) ** 2) { hurtPlayer(dmg, src); return true; }
-  return false;
+  let hit = false;
+  forPls(() => { hurtPlayer(dmg, src); hit = true; }, p => {
+    const t = clamp((p.x - x1) * dx + (p.y - y1) * dy, 0, len);
+    const px = x1 + dx * t - p.x, py = y1 + dy * t - p.y;
+    return px * px + py * py < (w + p.r) ** 2;
+  });
+  return hit;
 }
 const angTo = e => Math.atan2(G.p.y - e.y, G.p.x - e.x);
 
@@ -170,9 +172,11 @@ function* gArc(e, o = {}) {
   e.mv = 'stay';
   tele({ kind: 'arc', x: e.x, y: e.y, r, a, half, t: tt, col });
   yield tt;
-  const p = G.p, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy);
-  let da = Math.abs(((Math.atan2(dy, dx) - a + Math.PI * 3) % TAU) - Math.PI);
-  if (d < r + p.r && da < half) hurtPlayer(dmg, e);
+  forPls(() => hurtPlayer(dmg, e), p => {
+    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy);
+    const da = Math.abs(((Math.atan2(dy, dx) - a + Math.PI * 3) % TAU) - Math.PI);
+    return d < r + p.r && da < half;
+  });
   fxArc(e.x, e.y, a, half, r * 0.85, e.def.col || '#ffffff', 0.15, 4);
   e.mv = e.def.mv || 'chase';
   yield 0.2;

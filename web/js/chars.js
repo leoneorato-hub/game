@@ -499,7 +499,7 @@ const WEAPONS = {
           const p = G.p;
           p.invuln = Math.max(p.invuln, 1.1); p.flyHigh = 0.9;
           fxText(p.x, p.y - 20, 'INSIEME!', '#ff7ad9', 1, true);
-          setTimeout(() => { if (G && !G.over) { aoe(G.p.x, G.p.y, 110 * G.s.area, 70 * lvMul(w, 0.15), { kb: 300, src: 'badeline' }, '#ff7ad9'); shake(6); sfx('boom'); } }, 850);
+          { const me = G.p, ar = G.s.area; setTimeout(() => { if (G && !G.over) { aoe(me.x, me.y, 110 * ar, 70 * lvMul(w, 0.15), { kb: 300, src: 'badeline' }, '#ff7ad9'); shake(6); sfx('boom'); } }, 850); }
         }
       }
     },
@@ -1464,7 +1464,7 @@ function describeOption(o) {
     const willMax = lvl + 1 >= d.max;
     const evo = EVOS.find(r => r.w === o.id && r.char === G.char.id);
     const evoReadyAfter = evo && willMax && evo.req.every(q => owned(q));
-    return { ...o, name: d.tiers && lvl ? weaponName({ id: o.id, lvl: lvl + 1 }) : d.name, line, lvl, max: d.max, isNew: !w, icon: d.tiers ? [d.icon[0], TIERS[lvl].c, d.icon[2]] : d.icon, syn: synergiesFor(o.id), evo: evoReadyAfter, tag: w ? 'LV ' + lvl + ' → ' + (lvl + 1) : 'NUOVA ARMA' };
+    return { ...o, name: d.tiers && lvl ? weaponName({ id: o.id, lvl: lvl + 1 }) : d.name, line, lvl, max: d.max, isNew: !w, icon: d.tiers ? [d.icon[0], TIERS[lvl].c, d.icon[2]] : d.icon, syn: synergiesFor(o.id), evo: evoReadyAfter, tag: w ? 'ARMA · LV ' + lvl + ' → ' + (lvl + 1) : 'ARMA · NUOVA', group: 'arma' };
   }
   if (o.kind === 'passive' || o.kind === 'charm') {
     const p = getP(o.id), d = PASSIVES[o.id];
@@ -1477,7 +1477,7 @@ function describeOption(o) {
     const evoRule = EVOS.find(r => r.char === G.char.id && r.req.includes(o.id));
     const evo = evoRule && getW(evoRule.w)?.lvl >= WEAPONS[evoRule.w].max && evoRule.req.every(q => q === o.id || owned(q));
     return { ...o, name: d.name, line: d.line(lvl + 1), lvl, max: d.max, isNew: !p, icon: d.icon, syn: synergiesFor(o.id), evo, warn,
-      tag: o.kind === 'charm' ? 'AMULETO · ' + d.charm + ' TACCHE' : d.relic ? 'RELIQUIA DEL MULTIVERSO' : d.isaac ? 'OGGETTO' : p ? 'LV ' + lvl + ' → ' + (lvl + 1) : 'NUOVO PASSIVO' };
+      tag: o.kind === 'charm' ? 'SUPPORTO · AMULETO ' + d.charm + ' TACCHE' : d.relic ? 'RELIQUIA DEL MULTIVERSO' : d.isaac ? 'SUPPORTO · OGGETTO' : p ? 'SUPPORTO · LV ' + lvl + ' → ' + (lvl + 1) : 'SUPPORTO · NUOVO', group: 'supporto' };
   }
   if (o.kind === 'boon') {
     const g = GODS[o.god], cur = G.boons[o.slot];

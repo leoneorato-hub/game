@@ -50,8 +50,7 @@ const UI = {
 
   // ------------------------------------------------------------------ TITOLO
   initTitle() {
-    $('#b-story').onclick = () => { sfx('ui'); this.mode = 'story'; this.openChars(); };
-    $('#b-extra').onclick = () => { sfx('ui'); this.mode = 'extra'; this.openChars(); };
+    $('#b-start').onclick = () => { sfx('ui'); this.openPlayers(); };
     $('#b-shop').onclick = () => { sfx('ui'); this.openShop(); };
     $('#b-controls').onclick = () => { sfx('ui'); this.openControls('s-title'); };
     $('#b-options').onclick = () => { sfx('ui'); this.openOptions('s-title'); };
@@ -61,6 +60,144 @@ const UI = {
     $('#title-progress').textContent = done ? 'Storia: ' + done + '/' + STORY.length + ' capitoli ricuciti · Filo: ' + META.thread : 'Filo: ' + META.thread;
   },
   openTitle() { this.initTitle(); this.back = null; this.show('s-title'); },
+
+  // ------------------------------------------------------------------ SINGOLO / CO-OP
+  players: 'single',
+  party: [],
+  openPlayers() {
+    this.bigArt();
+    $('#b-single').onclick = () => { sfx('ui'); this.players = 'single'; this.party = []; this.openModes(); };
+    $('#b-coop').onclick = () => { sfx('ui'); this.players = 'coop'; this.openModes(); };
+    this.back = () => this.openTitle();
+    this.show('s-players', this.players === 'coop' ? '#b-coop' : '#b-single');
+  },
+  openModes() {
+    this.bigArt();
+    $('#modes-who').textContent = this.players === 'coop' ? 'Co-op locale (2–4 giocatori)' : 'Giocatore singolo';
+    const done = Object.keys(META.beaten).length;
+    $('#m-story-meta').textContent = done ? 'Capitoli ricuciti: ' + done + '/' + STORY.length : 'Consigliata per iniziare';
+    $('#m-endless-meta').textContent = 'Record: punto ' + (META.endlessBest || 0) + ' · ' + fmtTime(META.endlessTime || 0) + ' · Memorie: ' + (META.lore || 0) + '/' + LORE.length;
+    const go = mode => { sfx('ui'); this.mode = mode; if (this.players === 'coop') this.openLobby(); else this.openChars(); };
+    $('#b-m-story').onclick = () => go('story');
+    $('#b-m-endless').onclick = () => go('endless');
+    $('#b-m-extra').onclick = () => go('extra');
+    this.back = () => this.openPlayers();
+    this.show('s-modes', this.mode === 'endless' ? '#b-m-endless' : '#b-m-story');
+  },
+  // disegni animati sulle grandi scelte
+  bigArt() {
+    document.querySelectorAll('.bc-art').forEach(cnv => {
+      if (this.anim.some(a => a.cnv === cnv)) return;
+      const kind = cnv.dataset.art;
+      this.anim.push({ cnv, draw: t => {
+        const x = cnv.getContext('2d'); x.imageSmoothingEnabled = false;
+        x.fillStyle = '#120c16'; x.fillRect(0, 0, 160, 90);
+        if (TILES) { const k = { single: 'hk', coop: 'terra', story: 'blas', endless: 'hades' }[kind] || 'hk'; for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) { x.globalAlpha = 0.35; x.drawImage(TILES[k] || TILES.hk, i * 32 - ((t * 10) % 32), j * 32); } x.globalAlpha = 1; }
+        const hero = (n, px, py, ph, sc = 1.5) => { const s = SPR[n + '_w' + (Math.floor(t * 8 + ph) % 4)] || SPR[n]; if (!s) return; x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.ellipse(px, py, 9, 2.5, 0, 0, TAU); x.fill(); x.drawImage(s.img, Math.round(px - s.w * sc / 2), Math.round(py - s.h * sc), s.w * sc, s.h * sc); };
+        if (kind === 'single') hero(this.sel.char || 'knight', 80, 82, 0, 1.8);
+        else if (kind === 'coop') ['knight', 'madeline', 'zagreus', 'isaac'].forEach((n, i) => { hero(n, 30 + i * 34, 80 + (i % 2) * 3, i); x.fillStyle = PCOL[i]; x.fillRect(30 + i * 34 - 5, 14 + (i % 2) * 3, 10, 2); });
+        else if (kind === 'story') {
+          STORY.slice(1, 9).forEach((ch, i) => {
+            const px = 8 + (i % 4) * 30, py = 12 + Math.floor(i / 4) * 34, b = META.beaten[ch.id];
+            const tl = WTHUMB[ch.id] || (WTHUMB[ch.id] = paintTile(WORLDS[ch.id].tiles[0], 3));
+            x.drawImage(tl, 0, 0, 26, 26, px, py, 26, 26);
+            x.strokeStyle = b ? '#ffd23f' : '#1a1220'; x.strokeRect(px + 0.5, py + 0.5, 25, 25);
+            if (b) { x.fillStyle = '#ffd23f'; x.fillRect(px + 20, py + 2, 4, 4); }
+            x.strokeStyle = '#e2b04a'; x.setLineDash([2, 2]); x.strokeRect(px - 1.5, py - 1.5, 29, 29); x.setLineDash([]);
+          });
+          const s = SPR['B_cucitrice_0']; if (s) { const k = Math.min(1, 80 / s.h); x.drawImage(s.img, 156 - s.w * k, 88 - s.h * k + Math.sin(t * 2) * 2, s.w * k, s.h * k); }
+        }
+        else { const cx = 80, cy = 45; for (let i = 0; i < 9; i++) { const a = t * 0.8 + i / 9 * TAU; x.fillStyle = ['#1e2840', '#4a1414', '#1c2a24', '#c8d4e8', '#2a3226', '#5a4630', '#2c4a22', '#4a3424', '#0c0a14'][i]; x.fillRect(Math.round(cx + Math.cos(a) * 52 - 8), Math.round(cy + Math.sin(a) * 26 - 6), 16, 12); } x.strokeStyle = '#e2b04a'; x.setLineDash([2, 2]); x.beginPath(); x.ellipse(cx, cy, 52, 26, 0, 0, TAU); x.stroke(); x.setLineDash([]); if (SPR.spool) x.drawImage(SPR.spool.img, cx - 9, cy - 10, 18, 20); }
+      } });
+    });
+  },
+
+  // ------------------------------------------------------------------ LOBBY CO-OP
+  lobby: [],
+  openLobby() {
+    this.lobby = this.lobby.filter(m => m.dev);
+    this.lobbyGo = null;
+    $('#lobby-help').innerHTML = ['kb1', 'kb2', 'kb3', 'kb4', 'pad0'].map(d => `<span><b>${esc(DEVICES[d].name)}</b> · ${esc(DEVICES[d].hint)}</span>`).join('');
+    this.renderLobby();
+    this.back = () => this.openModes();
+    this.show('s-lobby');
+  },
+  renderLobby() {
+    const box = $('#lobby-slots');
+    box.innerHTML = '';
+    this.anim = this.anim.filter(a => !a.lobby);
+    for (let i = 0; i < 4; i++) {
+      const m = this.lobby[i];
+      const d = el('div', 'lobby-slot' + (m ? ' joined' : '') + (m && m.ready ? ' ready' : ''));
+      d.style.setProperty('--pc', PCOL[i]);
+      if (!m) {
+        d.innerHTML = `<span class="ls-label">P${i + 1}</span><span class="ls-hint">Libero<br>Premi SPAZIO, INVIO, U, 0 del tastierino o A su un gamepad per entrare</span>`;
+      } else {
+        const c = CHARS[m.char];
+        d.innerHTML = `<span class="ls-label">P${i + 1}</span><span class="ls-dev">${esc(DEVICES[m.dev].name)}</span><canvas width="48" height="56"></canvas><span class="ls-arrows">◀ <span class="ls-name">${esc(c.name)}</span> ▶</span><span class="ls-hint">${esc(c.game)}</span><span class="ls-hint">${m.ready ? 'Pronto! (abilità per annullare)' : 'Abilità = PRONTO'}</span>`;
+        const cnv = d.querySelector('canvas');
+        this.anim.push({ lobby: true, cnv, draw: t => {
+          const x = cnv.getContext('2d'); x.imageSmoothingEnabled = false; x.clearRect(0, 0, 48, 56);
+          const s = SPR[c.spr + (m.ready ? '_w' + (Math.floor(t * 9) % 4) : (Math.sin(t * 2.6 + i) > 0 ? '_i1' : '_i0'))] || SPR[c.spr];
+          const k = Math.min(1.4, 44 / s.h);
+          x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.ellipse(24, 53, 12, 3, 0, 0, TAU); x.fill();
+          x.drawImage(s.img, Math.round(24 - s.w * k / 2), Math.round(55 - s.h * k), s.w * k, s.h * k);
+        } });
+      }
+      box.appendChild(d);
+    }
+    const n = this.lobby.length, ready = n >= 2 && this.lobby.every(m => m.ready);
+    $('#lobby-status').textContent = n < 2 ? 'Servono almeno 2 giocatori' : ready ? 'Tutti pronti! Si parte…' : 'In attesa che tutti siano pronti (' + this.lobby.filter(m => m.ready).length + '/' + n + ')';
+    if (ready && !this.lobbyGo) {
+      this.lobbyGo = setTimeout(() => {
+        this.lobbyGo = null;
+        if (UI.current !== 's-lobby' || !(this.lobby.length >= 2 && this.lobby.every(m => m.ready))) return;
+        this.party = this.lobby.map(m => ({ char: m.char, dev: m.dev }));
+        sfx('evo');
+        if (this.mode === 'extra') this.openStages(); else this.openStory();
+      }, 900);
+    }
+  },
+  lobbyAct(dev, act) {
+    let i = this.lobby.findIndex(m => m.dev === dev);
+    const ids = Object.keys(CHARS);
+    if (i < 0) {
+      if (act !== 'ab' || this.lobby.length >= 4) return false;
+      const taken = this.lobby.map(m => m.char);
+      this.lobby.push({ dev, char: ids.find(id => !taken.includes(id)) || 'knight', ready: false });
+      i = this.lobby.length - 1;
+      sfx('ui'); voiceBlips(this.lobby[i].char === 'terrarian' ? 'guide' : this.lobby[i].char, 'eccomi', 4);
+    } else {
+      const m = this.lobby[i];
+      if (act === 'ab') { m.ready = !m.ready; sfx(m.ready ? 'evo' : 'ui'); }
+      else if ((act === 'l' || act === 'r') && !m.ready) { const k = ids.indexOf(m.char); m.char = ids[(k + (act === 'r' ? 1 : -1) + ids.length) % ids.length]; sfx('ui'); const [who, text] = vary('sel' + m.char, SELECT_ALT[m.char]); voiceBlips(who, text, 6); }
+      else if (act === 'leave') { this.lobby.splice(i, 1); sfx('ui'); }
+      else return false;
+    }
+    this.renderLobby();
+    const slot = $('#lobby-slots').children[Math.min(i, 3)]; if (slot) { slot.classList.remove('bump'); void slot.offsetWidth; slot.classList.add('bump'); }
+    return true;
+  },
+  lobbyKey(e) {
+    if (e.repeat) return true;
+    if (e.code === 'Escape') { if (this.lobby.length) { this.lobby.pop(); this.renderLobby(); } else this.back(); return true; }
+    for (const dev of ['kb1', 'kb2', 'kb3', 'kb4']) {
+      const D = DEVICES[dev];
+      if (D.ab.includes(e.code)) return this.lobbyAct(dev, 'ab');
+      if (D.left.includes(e.code)) return this.lobbyAct(dev, 'l');
+      if (D.right.includes(e.code)) return this.lobbyAct(dev, 'r');
+    }
+    return false;
+  },
+  lobbyPad(i, P) {
+    const dev = 'pad' + i;
+    if (P.aEdge) this.lobbyAct(dev, 'ab');
+    if (P.lEdge) this.lobbyAct(dev, 'l');
+    if (P.rEdge) this.lobbyAct(dev, 'r');
+    if (P.bEdge) { if (this.lobby.some(m => m.dev === dev)) this.lobbyAct(dev, 'leave'); else if (!this.lobby.length) this.back(); }
+  },
+  partyOf() { return this.players === 'coop' && this.party.length ? this.party : [{ char: this.sel.char, dev: 'solo' }]; },
+  partyName() { return this.partyOf().map(m => CHARS[m.char].name).join(' · '); },
 
   // ------------------------------------------------------------------ PERSONAGGI
   openChars() {
@@ -108,7 +245,7 @@ const UI = {
       let n = c.spr + '_w' + ph;
       const s = SPR[n] || SPR[c.spr], sc = 4;
       x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.ellipse(80, 140, 34 - jump * 0.8, 6, 0, 0, TAU); x.fill();
-      if (c.id === 'madeline') { x.fillStyle = '#d1343a'; for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(80 - 14 - i * 10, 60 + i * 5 + Math.sin(t * 6 + i) * 2 - jump, 15 - i * 1.6, 0, TAU); x.fill(); } }
+      if (c.id === 'madeline' && !(window.HERO_META && HERO_META.madeline)) { x.fillStyle = '#d1343a'; for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(80 - 14 - i * 10, 60 + i * 5 + Math.sin(t * 6 + i) * 2 - jump, 15 - i * 1.6, 0, TAU); x.fill(); } }
       if (c.id === 'v1' && V1REF.complete && V1REF.naturalWidth) {
         const k = 2, bob = Math.round(Math.sin(t * 2.5) * 2);
         if (picked) x.filter = 'brightness(3)';
@@ -117,9 +254,9 @@ const UI = {
       } else x.drawImage(picked ? s.white : s.img, Math.round(80 - s.w * sc / 2), Math.round(140 - s.h * sc - jump), s.w * sc, s.h * sc);
     } });
     this.pickChar(this.sel.char, true);
-    $('#b-chars-next').textContent = this.mode === 'story' ? 'Scegli il capitolo →' : 'Scegli la toppa →';
-    $('#chars-title').textContent = this.mode === 'story' ? 'Storia: scegli chi ricucire' : 'Toppe Extra: scegli chi ricucire';
-    this.back = () => this.openTitle();
+    $('#b-chars-next').textContent = this.mode === 'story' ? 'Scegli il capitolo →' : this.mode === 'endless' ? 'Scegli il mondo di partenza →' : 'Scegli la toppa →';
+    $('#chars-title').textContent = (this.mode === 'story' ? 'Storia' : this.mode === 'endless' ? 'Endless' : 'Toppe classiche') + ': scegli chi ricucire';
+    this.back = () => this.openModes();
     this.show('s-chars');
   },
   pickChar(id, silent) {
@@ -144,14 +281,25 @@ const UI = {
   confirmChar() {
     this.pickedT = performance.now() / 1000;
     sfx('evo');
-    setTimeout(() => (this.mode === 'story' ? this.openStory() : this.openStages()), 380);
+    setTimeout(() => (this.mode === 'extra' ? this.openStages() : this.openStory()), 380);
   },
 
   // ------------------------------------------------------------------ STORIA
   openStory() {
     const list = $('#story-list');
     list.innerHTML = '';
-    STORY.forEach((ch, i) => {
+    const endless = this.mode === 'endless';
+    $('#story-title').textContent = endless ? 'Il Telaio Infinito' : 'La Scala dei Finali';
+    $('#story-rule').textContent = endless ? 'scegli il mondo di partenza: poi i mondi si susseguono senza fine (boss ogni 5 minuti)' : 'ogni capitolo dura 20 minuti: mini-boss al 5\', intruso al 10\', mini-boss rinforzato al 15\', boss al 18\'';
+    const party = this.partyOf();
+    if (endless) {
+      const b = el('button', 'quilt-patch nav');
+      b.type = 'button'; b.style.setProperty('--i', 0);
+      b.innerHTML = `<span class="thumb" style="background-image:url(${stageThumb('telaio')})"></span><span class="qp-body"><span class="st-num">Endless</span><span class="st-name">Mondo casuale</span><span class="st-tag">Il Telaio sceglie per te</span><span class="st-boss">Record: punto <b>${META.endlessBest || 0}</b></span></span>`;
+      b.onclick = () => { sfx('ui'); startRun(party, pick(Object.keys(WORLDS).filter(k => k !== 'finale')), 'endless'); };
+      list.appendChild(b);
+    }
+    (endless ? STORY.filter(ch => WORLDS[ch.id] && ch.id !== 'finale') : STORY).forEach((ch, i) => {
       const st = STAGES[ch.id];
       const beaten = META.beaten[ch.id];
       const b = el('button', 'quilt-patch nav' + (beaten ? ' done' : ''));
@@ -163,14 +311,14 @@ const UI = {
         <span class="st-name">${esc(st.name)}</span>
         <span class="st-tag">${esc(st.game || '')}</span>
         <span class="st-boss">Boss: <b>${esc(bossName)}</b></span></span>`;
-      b.onclick = () => { sfx('ui'); startRun(this.sel.char, ch.id, 'story'); };
+      b.onclick = () => { sfx('ui'); startRun(party, ch.id, endless ? 'endless' : 'story'); };
       list.appendChild(b);
     });
-    $('#story-who').textContent = CHARS[this.sel.char].name;
-    this.back = () => this.openChars();
+    $('#story-who').textContent = this.partyName();
+    this.back = () => (this.players === 'coop' ? this.openLobby() : this.openChars());
     const firstOpen = STORY.find(ch => !META.beaten[ch.id]);
     this.show('s-story');
-    if (firstOpen) setTimeout(() => list.children[STORY.indexOf(firstOpen)]?.focus(), 0);
+    if (firstOpen && !endless) setTimeout(() => list.children[STORY.indexOf(firstOpen)]?.focus(), 0);
   },
 
   // ------------------------------------------------------------------ TOPPE EXTRA
@@ -194,36 +342,77 @@ const UI = {
           ${bt ? `<span class="st-best">Completato con ${esc(CHARS[this.sel.char].name)} in ${fmtTime(bt)}</span>` : ''}
         </span>`;
       b.onfocus = () => { this.sel.stage = s.id; document.querySelectorAll('.stage-card').forEach(x => x.classList.toggle('is-sel', x === b)); };
-      b.onclick = () => { this.sel.stage = s.id; sfx('ui'); startRun(this.sel.char, s.id, 'extra'); };
+      b.onclick = () => { this.sel.stage = s.id; sfx('ui'); startRun(this.partyOf(), s.id, 'extra'); };
       list.appendChild(b);
     });
-    $('#stage-who').textContent = CHARS[this.sel.char].name;
-    this.back = () => this.openChars();
+    $('#stage-who').textContent = this.partyName();
+    this.back = () => (this.players === 'coop' ? this.openLobby() : this.openChars());
     this.show('s-stages');
   },
 
   // ------------------------------------------------------------------ MERCERIA
-  openShop() {
-    const grid = $('#shop-grid');
+  shopTab: 'pu',
+  shopSel: 'might',
+  openShop(tab) {
+    if (tab) this.shopTab = tab;
+    const grid = $('#shop-grid'), det = $('#shop-detail');
     grid.innerHTML = '';
-    for (const it of SHOP) {
-      const lvl = META.up[it.id] || 0;
-      const max = lvl >= it.max;
-      const cost = shopCost(it, lvl);
-      const b = el('button', 'shop-item nav' + (max ? ' maxed' : ''));
-      b.type = 'button';
-      b.disabled = !max && META.thread < cost;
-      b.innerHTML = `<img alt="" src="${iconURL(it.icon[0], it.icon[1], it.icon[2], 4)}"><span class="si-name">${esc(it.name)}</span>
-        <span class="pips">${Array.from({ length: it.max }, (_, k) => `<i class="${k < lvl ? 'on' : ''}"></i>`).join('')}</span>
-        <span class="si-line">${esc(it.line)}</span><span class="si-cost">${max ? 'AL MASSIMO' : cost + ' Filo'}</span>`;
-      b.onclick = () => {
-        if (max || META.thread < cost) return;
-        META.thread -= cost; META.up[it.id] = lvl + 1; saveMeta();
-        sfx('evo');
-        this.openShop();
-        this.say($('#shop-voice'), 'ditale', pick(['Ottima scelta! Te lo cucio subito.', 'Venduto! Niente resi, ricordatelo.', 'Ah, un intenditore. O una intenditrice. O un recipiente di Vuoto.']));
-      };
-      grid.appendChild(b);
+    document.querySelectorAll('.shop-tab').forEach(b => b.classList.toggle('on', b.id === 'tab-' + this.shopTab));
+    $('#tab-pu').onclick = () => { sfx('ui'); this.openShop('pu'); };
+    $('#tab-ult').onclick = () => { sfx('ui'); this.openShop('ult'); };
+    $('#tab-lore').onclick = () => { sfx('ui'); this.openShop('lore'); };
+    $('#b-refund').hidden = this.shopTab !== 'pu';
+    $('#b-refund').onclick = () => {
+      const back = refundAll();
+      sfx('ui');
+      this.openShop();
+      this.say($('#shop-voice'), 'ditale', back ? 'Rimborsati ' + back + ' Filo. Scuci pure, poi ricuci come preferisci.' : 'Non c\'è niente da rimborsare, tesoro.');
+    };
+    const sayBuy = () => this.say($('#shop-voice'), 'ditale', pick(['Ottima scelta! Te lo cucio subito.', 'Venduto! Niente resi… a parte il pulsante "Rimborsa tutto". Quello sì.', 'Ah, un intenditore. O una intenditrice. O un recipiente di Vuoto.', 'Un punto in più, un pericolo in meno.']));
+    if (this.shopTab === 'pu') {
+      for (const it of POWERUPS) {
+        const lvl = powerLvl(it.id), max = lvl >= it.max;
+        const b = el('button', 'pu-tile nav' + (max ? ' maxed' : '') + (this.shopSel === it.id ? ' is-sel' : ''));
+        b.type = 'button'; b.dataset.id = it.id;
+        b.innerHTML = `<img alt="" src="${puIconURL(it.id, 3)}"><span class="pu-n">${esc(it.name)}</span><span class="pips">${Array.from({ length: it.max }, (_, k) => `<i class="${k < lvl ? 'on' : ''}"></i>`).join('')}</span>`;
+        const showDet = () => {
+          this.shopSel = it.id;
+          document.querySelectorAll('.pu-tile').forEach(x => x.classList.toggle('is-sel', x === b));
+          const l = powerLvl(it.id), mx = l >= it.max, cost = powerCost(it, l);
+          det.innerHTML = `<img alt="" src="${puIconURL(it.id, 4)}"><h3>${esc(it.name)}</h3><p>${esc(it.line)}</p><p class="sd-from">Livello ${l}/${it.max}</p><p class="sd-cost">${mx ? 'AL MASSIMO' : cost + ' Filo'}</p><button class="btn primary nav" type="button" id="b-buy" ${mx || META.thread < cost ? 'disabled' : ''}>${mx ? 'Completo' : META.thread < cost ? 'Filo insufficiente' : 'Compra'}</button>`;
+          $('#b-buy').onclick = () => { if (buyPower(it)) { sfx('evo'); this.openShop(); const t = document.querySelector(`.pu-tile[data-id="${it.id}"]`); if (t) { t.classList.add('buy'); t.focus(); } sayBuy(); } };
+        };
+        b.onfocus = b.onmouseenter = showDet;
+        b.onclick = () => { showDet(); if (buyPower(it)) { sfx('evo'); this.openShop(); const t = document.querySelector(`.pu-tile[data-id="${it.id}"]`); if (t) { t.classList.add('buy'); t.focus(); } sayBuy(); } else sfx('ui'); };
+        grid.appendChild(b);
+        if (this.shopSel === it.id) showDet();
+      }
+      if (!POWERUPS.some(it => it.id === this.shopSel)) { this.shopSel = 'might'; }
+    } else if (this.shopTab === 'ult') {
+      for (const id of Object.keys(CHARS)) {
+        const U = ULTS[id], own = ultOwned(id);
+        const b = el('button', 'pu-tile nav' + (own ? ' owned' : ' locked') + (this.shopSel === 'u:' + id ? ' is-sel' : ''));
+        b.type = 'button'; b.dataset.id = 'u:' + id;
+        const ic = SPR['ult_' + id] ? spriteURL('ult_' + id, 3) : spriteURL(CHARS[id].spr, 2);
+        b.innerHTML = `<img alt="" src="${ic}"><span class="pu-n">${esc(U.name)}</span><span class="pu-n" style="color:var(--muted)">${esc(CHARS[id].name)}</span>`;
+        const showDet = () => {
+          this.shopSel = 'u:' + id;
+          document.querySelectorAll('.pu-tile').forEach(x => x.classList.toggle('is-sel', x === b));
+          det.innerHTML = `<img alt="" src="${SPR['ult_' + id] ? spriteURL('ult_' + id, 4) : spriteURL(CHARS[id].spr, 3)}"><h3 style="color:${U.col}">${esc(U.name)}</h3><p class="sd-from">${esc(CHARS[id].name)} · ${esc(U.from)}</p><p>${esc(U.desc)}</p><p class="sd-from">Si carica uccidendo, colpendo ed essendo colpiti. Si usa con <kbd>E</kbd> (pad: <kbd>Y</kbd>) quando l'anello del ritratto è pieno.</p><p class="sd-cost">${own ? 'GIÀ TUA' : ULT_COST + ' Filo'}</p><button class="btn primary nav" type="button" id="b-buy" ${own || META.thread < ULT_COST ? 'disabled' : ''}>${own ? 'Sbloccata' : META.thread < ULT_COST ? 'Filo insufficiente' : 'Compra'}</button>`;
+          $('#b-buy').onclick = () => { if (buyUlt(id)) { sfx('evo'); this.openShop(); sayBuy(); } };
+        };
+        b.onfocus = b.onmouseenter = showDet;
+        b.onclick = () => { showDet(); if (buyUlt(id)) { sfx('evo'); this.openShop(); const t = document.querySelector(`.pu-tile[data-id="u:${id}"]`); if (t) { t.classList.add('buy'); t.focus(); } sayBuy(); } else sfx('ui'); };
+        grid.appendChild(b);
+        if (this.shopSel === 'u:' + id) showDet();
+      }
+      if (!this.shopSel.startsWith('u:')) det.innerHTML = '<p class="muted">Ogni personaggio ha una mossa definitiva presa dal suo gioco. Scegline una per i dettagli.</p>';
+    } else {
+      const n = META.lore || 0;
+      det.innerHTML = `<h3>Memorie del Telaio</h3><p>${n}/${LORE.length} recuperate.</p><p class="sd-from">Si sbloccano battendo i boss nella modalità Endless: una per ogni mondo ricucito.</p>`;
+      const box = el('div', 'lore-list');
+      LORE.forEach((l, i) => box.appendChild(el('p', 'lore-item' + (i < n ? '' : ' locked'), i < n ? `<b>${esc(VOICES[l[0]].name)}:</b> ${esc(l[1].replace('{nome}', 'viandante'))}` : 'Memoria ' + (i + 1) + ' — ancora cucita nel Telaio…')));
+      grid.appendChild(box);
     }
     $('#shop-thread').textContent = META.thread;
     const sp = $('#shop-portrait');
@@ -235,7 +424,7 @@ const UI = {
     } });
     if (!this.voice.el || this.voice.el.id !== 'shop-voice' || this.voice.shown >= this.voice.text.length) this.say($('#shop-voice'), 'ditale', pick(DITALE_QUIPS));
     this.back = () => this.openTitle();
-    this.show('s-shop');
+    if (this.current !== 's-shop') this.show('s-shop', '.shop-tab.on');
   },
 
   // ------------------------------------------------------------------ COMANDI / OPZIONI
@@ -268,8 +457,11 @@ const UI = {
   // ------------------------------------------------------------------ LEVEL-UP
   openLevelUp() {
     MODE = 'levelup';
+    if (!G.lvQueue.length) { G.pendingLv--; G.lvQueue = alivePls().slice(); }
+    const pl = G.lvQueue.shift();
+    usePl(pl); this.lvPl = pl;
     sfx('lvl');
-    fxRing(G.p.x, G.p.y, 4, 60, '#ffd23f', 0.5, 3);
+    fxRing(G.p.x, G.p.y, 4, 60, coop() ? pl.col : '#ffd23f', 0.5, 3);
     this.levelOpts = buildOptions(3);
     this.renderLevelUp();
     this.back = null;
@@ -278,7 +470,7 @@ const UI = {
   renderLevelUp() {
     const opts = this.levelOpts;
     const c = G.char;
-    $('#lv-title').textContent = 'LIVELLO ' + G.level;
+    $('#lv-title').innerHTML = 'LIVELLO ' + G.level + (coop() ? `<span class="lv-who" style="color:${this.lvPl.col}">${esc(this.lvPl.label)} · ${esc(c.name)} sceglie</span>` : '');
     const boon = opts.find(o => o.kind === 'boon');
     const sub = c.scrolls && opts[0]?.kind === 'scroll' ? 'Scegli una Pergamena del Potere' : c.id === 'isaac' ? 'Scegli un piedistallo' : c.id === 'zagreus' && boon ? 'Un dono dall\'Olimpo' : 'Scegli una toppa da cucire';
     $('#lv-sub').textContent = sub;
@@ -289,7 +481,7 @@ const UI = {
     row.innerHTML = '';
     opts.forEach((o, i) => {
       const relic = o.kind === 'passive' && PASSIVES[o.id]?.relic;
-      const b = el('button', 'lv-card nav kind-' + o.kind + (c.id === 'isaac' ? ' pedestal' : '') + (relic ? ' relic' : '') + (o.evo ? ' evo' : ''));
+      const b = el('button', 'lv-card nav kind-' + o.kind + (o.group ? ' grp-' + o.group : '') + (c.id === 'isaac' ? ' pedestal' : '') + (relic ? ' relic' : '') + (o.evo ? ' evo' : ''));
       b.type = 'button';
       b.style.animationDelay = (i * 0.07) + 's';
       if (o.godCol) b.style.setProperty('--god', o.godCol);
@@ -335,19 +527,21 @@ const UI = {
     const card = document.querySelectorAll('.lv-card')[i];
     if (card) card.classList.add('chosen');
     applyOption(o);
-    G.pendingLv--;
     sfx('evo');
     fxRing(G.p.x, G.p.y, 4, 34, o.godCol || '#e2b04a', 0.4, 2);
     G.p.castT = 0.4; G.p.castCol = o.godCol || '#ffd23f';
     if (Math.random() < 0.45) bark('lvl');
-    setTimeout(() => {
-      if (G.pendingLv > 0) { this.openLevelUp(); return; }
-      this.hideAll();
-      MODE = 'play';
-    }, 160);
+    setTimeout(() => this.afterLevel(), 160);
+  },
+  afterLevel() {
+    if (!G) return;
+    if (G.lvQueue.length || G.pendingLv > 0) { this.openLevelUp(); return; }
+    usePl(leadPl());
+    this.hideAll();
+    MODE = 'play';
   },
   reroll() { if (G.rerolls <= 0) return; G.rerolls--; sfx('ui'); this.levelOpts = buildOptions(3); this.renderLevelUp(); const f = document.querySelector('.lv-card'); f && f.focus(); },
-  skip() { G.pendingLv--; G.thread += 10; if (G.pendingLv > 0) { this.openLevelUp(); return; } this.hideAll(); MODE = 'play'; },
+  skip() { G.thread += 10; this.afterLevel(); },
 
   // ------------------------------------------------------------------ SCELTE (doni, reliquie)
   openChoice(title, sub, opts) {
@@ -361,7 +555,7 @@ const UI = {
       b.type = 'button';
       b.style.animationDelay = (i * 0.07) + 's';
       b.innerHTML = `<span class="lv-key">${i + 1}</span><img alt="" src="${iconURL(o.icon[0], o.icon[1], o.icon[2], 5)}"><span class="lv-name">${esc(o.name)}</span><span class="lv-line">${esc(o.line)}</span>`;
-      b.onclick = () => { o.act(); sfx('evo'); this.hideAll(); MODE = 'play'; };
+      b.onclick = () => { o.act(); sfx('evo'); this.hideAll(); MODE = 'play'; if (G) usePl(leadPl()); };
       row.appendChild(b);
     });
     this.back = null;
@@ -371,7 +565,7 @@ const UI = {
   // ------------------------------------------------------------------ PAUSA
   openPause() {
     if (MODE === 'play') MODE = 'pause';
-    $('#pause-map').innerHTML = threadMapHTML();
+    $('#pause-map').innerHTML = coop() ? G.players.map(pl => withPl(pl, () => `<div class="tm-pl" style="--pc:${pl.col}"><h3 style="color:${pl.col};font-size:13px;grid-column:1/-1">${esc(pl.label)} · ${esc(pl.char.name)}${pl.down ? ' · A TERRA' : ''}</h3>${threadMapHTML()}</div>`)).join('') : threadMapHTML();
     $('#pause-tip').textContent = pick(TIPS);
     $('#b-resume').onclick = () => this.resume();
     $('#b-p-controls').onclick = () => this.openControls('s-pause');
@@ -398,7 +592,7 @@ const UI = {
     }[c.id];
     if (END_ALT[c.id]) { lines[0] = vary('ew' + c.id, END_ALT[c.id].win); lines[1] = vary('el' + c.id, END_ALT[c.id].lose); }
     const reason = G.reason === 'continue' ? 'IL CONTINUE è arrivato a zero.' : G.reason === 'panic' ? 'L\'attacco di panico ha avuto la meglio.' : '';
-    $('#end-title').textContent = win ? (G.stage.id === 'finale' && G.mode === 'story' ? 'LA COPERTA È SCUCITA' : 'TOPPA RICUCITA') : 'GAME OVER';
+    $('#end-title').textContent = G.mode === 'endless' ? 'IL TELAIO SI FERMA · PUNTO ' + G.loop : win ? (G.stage.id === 'finale' && G.mode === 'story' ? 'LA COPERTA È SCUCITA' : 'TOPPA RICUCITA') : 'GAME OVER';
     $('#end-title').className = win ? 'win' : 'lose';
     $('#end-quote').textContent = win ? lines[0] : lines[1];
     $('#end-reason').textContent = reason;
@@ -406,12 +600,12 @@ const UI = {
     const kills = G.kills, straw = G.straw, thread = Math.floor(G.thread);
     $('#end-receipt').innerHTML = `
       <div class="rc-head">MERCERIA DEL MULTIVERSO<br><small>di Sor Ditale · P.IVA 00000000001</small></div>
-      ${row('Cliente', esc(c.name))}${row('Toppa', esc(G.stage.name))}${row('Durata', fmtTime(G.t))}
+      ${row(G.players.length > 1 ? 'Clienti' : 'Cliente', esc(G.players.map(pl => pl.char.name).join(', ')))}${row(G.mode === 'endless' ? 'Ultimo mondo' : 'Toppa', esc(G.stage.name))}${row('Durata', fmtTime(G.t))}${G.mode === 'endless' ? row('Punti del Telaio', G.loop) + row('Memorie', (META.lore || 0) + '/' + LORE.length) : ''}
       <div class="rc-sep"></div>
       ${row('Uccisioni × ' + kills, (kills * 0.01).toFixed(2) + ' F')}
       ${row('Livello raggiunto', G.level)}
       ${row('Danno inflitto', Math.round(G.dmgDealt).toLocaleString('it-IT'))}
-      ${G.weapons.map(w => row('&nbsp;&nbsp;' + esc(weaponName(w)) + ' lv ' + w.lvl, w.evo ? '★' : '')).join('')}
+      ${G.players.length > 1 ? G.players.map(pl => row(`<b style="color:${pl.col}">${pl.label}</b> ${esc(pl.char.name)}`, pl.kills + ' ucc. · ' + Math.round(pl.dmg).toLocaleString('it-IT') + ' dmg')).join('') : G.weapons.map(w => row('&nbsp;&nbsp;' + esc(weaponName(w)) + ' lv ' + w.lvl, w.evo ? '★' : '')).join('')}
       ${row('Fragole × ' + straw, '0,00 F', 'muted')}
       ${row('IVA del Multiverso (22%)', 'inclusa')}
       <div class="rc-sep"></div>
@@ -419,15 +613,16 @@ const UI = {
       ${row('Filo in Merceria', META.thread + ' F', 'muted')}
       <div class="rc-foot">Grazie e arrivederci!<br>Non si accettano resi. Né strappi.</div>`;
     const idx = STORY.findIndex(x => x.id === G.stage.id);
+    const party = G.players.map(pl => ({ char: pl.char.id, dev: pl.dev }));
     const nextStory = G.mode === 'story' && win && idx >= 0 && STORY[idx + 1];
     const extraIds = ['telaio', 'capolinea', 'pozzo'];
     const nextExtra = G.mode !== 'story' && win && extraIds[extraIds.indexOf(G.stage.id) + 1];
     const next = nextStory ? nextStory.id : nextExtra;
     $('#b-next').hidden = !next;
     $('#b-next').textContent = nextStory ? nextStory.chap + ' →' : 'Prossima toppa →';
-    $('#b-next').onclick = () => startRun(c.id, next, G.mode);
-    $('#b-retry').onclick = () => startRun(c.id, G.stage.id, G.mode);
-    $('#b-change').onclick = () => { const m = G.mode; G = null; MODE = 'menu'; this.mode = m; this.openChars(); };
+    $('#b-next').onclick = () => startRun(party, next, G.mode);
+    $('#b-retry').onclick = () => startRun(party, G.mode === 'endless' ? G.order8[0] : G.stage.id, G.mode);
+    $('#b-change').onclick = () => { const m = G.mode; G = null; MODE = 'menu'; this.mode = m; if (this.players === 'coop') { this.lobby.forEach(x => { x.ready = false; }); this.openLobby(); } else this.openChars(); };
     $('#b-menu').onclick = () => { G = null; MODE = 'menu'; this.openTitle(); };
     this.back = null;
     this.show('s-end', next ? '#b-next' : '#b-retry');
@@ -456,7 +651,7 @@ function threadMapHTML() {
     <div class="tm-col"><h4>Sinergie</h4><ul class="map-s">${syn}</ul><h4>Ricuciture</h4><ul class="map-e">${evo}</ul></div>`;
 }
 
-const THUMB = {};
+const THUMB = {}, WTHUMB = {};
 function stageThumb(id) {
   if (THUMB[id]) return THUMB[id];
   const c = makeCanvas(96, 54), x = c.getContext('2d');

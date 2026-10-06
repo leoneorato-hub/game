@@ -1045,3 +1045,91 @@ Si combinano in tre **Duetti**: *Cucito Esplosivo*, *Schegge di Ghiaccio* e *Avi
 - **Voice line variabili** (`voices3.js`):
   - pool alternativi senza ripetizioni consecutive per selezione, saluti, intro e sconfitta dei boss, incontri e finali;
   - battute contestuali in gioco (level-up, HP basso, evoluzione, boss, evento, inattività).
+
+## 12. Alfa 0.4 — Co-op, modalità, Ultimate e Merceria
+
+### 12.1 Flusso dei menu
+`INIZIA` → **Singolo** o **Co-op locale (2–4)** → **Storia** o **Endless** (più le Toppe classiche) → scelta dell'eroe (singolo) o lobby (co-op) → capitolo / mondo di partenza.
+
+### 12.2 Co-op locale (fino a 4)
+- **Dispositivi:** Tastiera A (WASD), Tastiera B (frecce), Tastiera C (IJKL), Tastierino numerico, Gamepad 1–4. Nella lobby si entra premendo il tasto abilità del proprio dispositivo.
+- **Architettura:** ogni giocatore ha uno *slot* con il proprio stato (`p`, `char`, armi, passivi, statistiche…). Quando è il suo turno di aggiornarsi, di subire danno o di essere disegnato, lo slot viene caricato in `G` (`usePl`/`withPl` in `js/coop.js`), quindi tutte le armi e abilità esistenti funzionano senza modifiche.
+- **Nemici:** inseguono il giocatore vivo più vicino. Telegrafi, proiettili e contatti colpiscono chiunque ci sia dentro.
+- **Esperienza:** condivisa. A ogni livello sceglie un giocatore alla volta e il titolo dice chi.
+- **Gemme:** in co-op prendono a caso la valuta di uno dei giocatori. Le raccoglie chi le attira.
+- **A terra:** il giocatore resta come sagoma. Un compagno che gli sta vicino 2,5 s lo rianima al 40%. Se cadono tutti, la run finisce. Battere un boss rialza tutti.
+- **Schermo condiviso:** la telecamera inquadra il riquadro che contiene tutti, e i giocatori non possono allontanarsi oltre lo schermo.
+- **Scalatura:** con *n* giocatori i nemici hanno +55% vita per ogni giocatore oltre il primo e ne nascono +35%; i boss hanno +60% vita per giocatore aggiuntivo.
+
+### 12.3 Storia: 20 minuti per capitolo
+
+| Minuto | Evento |
+|---|---|
+| 0–5 | Nemici del mondo, eventi ogni ~60 s, orde dal 2:30 |
+| 5:00 | Mini-boss del mondo |
+| 7:00 | Iniziano gli **intrusi** da un altro mondo |
+| 10:00 | Mini-boss intruso; l'ambiente cambia (seconda atmosfera) |
+| 12:00 | Arrivano nemici **rinforzati** (più grandi, ×3,2 vita, ×4 esperienza) |
+| 15:00 | Mini-boss del mondo rinforzato (+50% vita) |
+| 17:30 | Avviso «Il boss si avvicina» |
+| 18:00 | **Boss finale** |
+| 22:00 | Il Continue, se il boss è ancora vivo |
+
+### 12.4 Endless: il Telaio Infinito
+- I mondi si susseguono in ordine casuale, con i Titoli di Coda ogni 9. In ogni mondo il mini-boss arriva al 2:30 e il boss al 5:00.
+- Ogni mondo successivo aumenta la difficoltà: `G.nodes` cresce di 1, quindi +22% vita e +10% danno dei nemici, e +35% vita dei boss.
+- **Storia dell'Endless:** ogni boss battuto sblocca una delle 12 *Memorie del Telaio*, che si possono rileggere nella Merceria. Raccontano chi era la Cucitrice: una sarta che non voleva lasciar finire le storie. Spiegano anche perché il Telaio non si ferma e cosa succede quando gli eroi vincono. L'Endless ha così una ragione narrativa: ogni vittoria allenta un filo.
+- Si salvano i record: punto massimo raggiunto e tempo.
+
+### 12.5 Esperienza
+- **Curva:** come in Vampire Survivors. Si parte da 5 XP; il fabbisogno cresce di 10 per livello fino al 20, di 13 fino al 40, poi di 16.
+- **Regolazione sul livello:** un livello atteso per minuto (`4 + 0.072·t − 0.0000165·t²`, circa 25 al 5' e 66 al 20') modula il valore dei frammenti tra ×0,45 e ×1,8. Chi è indietro recupera e chi è molto avanti rallenta.
+- **Valore dei frammenti:** il valore base del nemico × (1 + t/420).
+- **Frammenti a 4 grandezze:** piccolo, medio, grande e raro, nella valuta di ogni eroe: Geo, sangue, Oscurità, cristalli, Cellule, Lacrime, monete Terraria (rame/argento/oro/platino), centesimi di Isaac.
+
+### 12.6 Oggetti in gioco
+- **Distruttibili:** uno per mondo (lanterna di lucciole, urna del Tartaro, vaso di Terraria…). Si rompono come le candele di VS e lasciano cibo, Filo, frammenti o un oggetto speciale.
+- **Oggetti speciali:**
+  - Rosario delle Lacrime: uccide i nemici a schermo.
+  - Clessidra di Crono: congela tutto per 6 s.
+  - Bomba.
+  - Calamita da Sarta.
+  - Borsa e Sacco di Filo.
+  - Sfera dell'Ultimate: +35% di carica.
+  - Ago d'Oro: +1 rianimazione.
+- **Orde:** dal 2:30 circa ogni 90 s arriva un accerchiamento oppure una carica (mandria che attraversa lo schermo).
+
+### 12.7 Ultimate (si comprano nella Merceria)
+Si caricano uccidendo, infliggendo e subendo danno; si usano con **E** (pad **Y**). Ognuna ha un cut-in a tutto schermo.
+
+| Eroe | Ultimate | Mossa originale |
+|---|---|---|
+| Cavaliere | Urlo dell'Abisso | Abyss Shriek |
+| V1 | Railcannon Elettrico | Electric Railcannon |
+| Zagreus | Chiamata dell'Olimpo (cambia con il dio) | Chiamate divine di Hades |
+| Madeline | Spinta di Badeline | Badeline boost, Capitolo 6 |
+| Prigioniero | Runa dell'Omuncolo | Homunculus Rune |
+| Penitente | Mattutino del Guardiano | Aubade of the Nameless Guardian |
+| Terrariano | Ultimo Prisma | Last Prism |
+| Isaac | Mega Laser | Mega Blast |
+
+### 12.8 Merceria in stile Vampire Survivors
+- **15 potenziamenti con più livelli:**
+
+  | Gruppo | Potenziamenti |
+  |---|---|
+  | Offesa | Danno, Ricarica, Area, Durata |
+  | Difesa | Armatura, Vita, Rigenerazione, Rianimazione |
+  | Movimento e raccolta | Velocità, Magnetismo |
+  | Progressione | Fortuna, Crescita, Avidità, Maledizione, Ritira |
+
+- **Prezzo:** `base × (livello+1) × (1 + 10% per ogni acquisto già fatto)`. Il pulsante «Rimborsa tutto» restituisce il Filo speso.
+- **Schede:** Potenziamenti · Ultimate · Memorie del Telaio.
+
+### 12.9 HUD
+- **In alto a sinistra:** le file separate **ARMI** e **SUPPORTO**.
+  - Armi: pallini di livello; cornice d'oro al massimo; bordo pulsante quando la Ricucitura è pronta; ricarica come velatura che scende.
+  - Supporto: passivi, amuleti e reliquie.
+- **In basso a sinistra:** il ritratto, con l'anello dell'Ultimate e il badge del tasto.
+- **Level-up:** le carte sono etichettate «ARMA» (oro) o «SUPPORTO» (verde acqua), coerenti con l'HUD.
+- **Co-op:** un pannello compatto per giocatore con il suo colore, l'etichetta P1–P4 sopra ogni eroe e l'anello colorato ai piedi.

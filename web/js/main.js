@@ -9,28 +9,30 @@ const ctx = cv.getContext('2d');
 const INPUT = {
   keys: {}, pressed: {},
   touch: { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 },
-  abilityTouch: false, abilityTouchEdge: false,
-  pad: { x: 0, y: 0, a: false, aEdge: false, prev: {} },
+  abilityTouch: false, abilityTouchEdge: false, ultTouchEdge: false,
 };
 
-const MOVE_KEYS = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
+const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyU', 'KeyO', 'KeyY', 'Numpad8', 'Numpad4', 'Numpad5', 'Numpad6', 'Numpad0', 'NumpadEnter', 'Enter', 'ShiftRight', 'ControlRight', 'Slash', 'Period', 'KeyQ', 'KeyE']);
+const DLG_KEYS = ['Space', 'Enter', 'KeyE', 'NumpadEnter', 'KeyU', 'Numpad0'];
+// direzioni dei menu per tutte le tastiere della co-op
+const NAV_KEYS = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], KeyI: [0, -1], KeyK: [0, 1], KeyJ: [-1, 0], KeyL: [1, 0], Numpad8: [0, -1], Numpad5: [0, 1], Numpad4: [-1, 0], Numpad6: [1, 0] };
 
 addEventListener('keydown', e => {
   audioInit();
   if (!e.repeat) INPUT.pressed[e.code] = true;
   INPUT.keys[e.code] = true;
   if (MODE === 'dialog') {
-    if (['Space', 'Enter', 'KeyE', 'NumpadEnter'].includes(e.code)) { if (!e.repeat) advanceDialog(); e.preventDefault(); }
+    if (DLG_KEYS.includes(e.code)) { if (!e.repeat) advanceDialog(); e.preventDefault(); }
     if (e.code === 'Escape') { DLG.i = DLG.lines.length - 1; DLG.shown = DLG.text.length; advanceDialog(); e.preventDefault(); }
     return;
   }
-  if (MODE === 'play' && e.code === 'KeyQ' && G && G.char.id === 'v1') switchGun();
   const inGame = MODE === 'play' || MODE === 'panic' || MODE === 'cine';
-  if (inGame && (MOVE_KEYS[e.code] || e.code === 'Space' || e.code === 'Tab')) e.preventDefault();
+  if (inGame && GAME_KEYS.has(e.code)) e.preventDefault();
   if (inGame) {
     if ((e.code === 'Escape' || e.code === 'KeyP' || e.code === 'Tab') && MODE === 'play') { UI.openPause(); e.preventDefault(); }
     return;
   }
+  if (UI.current === 's-lobby' && UI.lobbyKey(e)) { e.preventDefault(); return; }
   // Menu e overlay
   if (MODE === 'choice') {
     const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code];
@@ -41,12 +43,13 @@ addEventListener('keydown', e => {
     if (n !== undefined) { UI.choose(n); e.preventDefault(); return; }
     if (e.code === 'KeyR') { UI.reroll(); return; }
     if (e.code === 'KeyX') { UI.skip(); return; }
+    if (['KeyU', 'Numpad0'].includes(e.code)) { document.activeElement?.click(); e.preventDefault(); return; }
   }
   if (UI.current === 's-chars') {
     const n = parseInt(e.key, 10);
     if (n >= 1 && n <= 8) { const id = Object.keys(CHARS)[n - 1]; if (UI.sel.char !== id) UI.pickChar(id); document.querySelector(`.char-card[data-id="${id}"]`)?.focus(); return; }
   }
-  const dir = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.code];
+  const dir = NAV_KEYS[e.code];
   const tag = document.activeElement?.tagName;
   if (dir && !(tag === 'INPUT' && document.activeElement.type === 'range' && dir[1] === 0)) { navMove(dir[0], dir[1]); e.preventDefault(); }
   if (e.code === 'Escape' && UI.back) { UI.back(); e.preventDefault(); }
@@ -94,105 +97,111 @@ tAb.addEventListener('touchend', e => { INPUT.abilityTouch = false; e.preventDef
 tAb.addEventListener('mousedown', () => { INPUT.abilityTouch = true; INPUT.abilityTouchEdge = true; });
 tAb.addEventListener('mouseup', () => { INPUT.abilityTouch = false; });
 document.getElementById('t-pause').addEventListener('click', () => { if (MODE === 'play') UI.openPause(); });
+const tUlt = document.getElementById('t-ult');
+if (tUlt) { tUlt.addEventListener('touchstart', e => { INPUT.ultTouchEdge = true; e.preventDefault(); }, { passive: false }); tUlt.addEventListener('mousedown', () => { INPUT.ultTouchEdge = true; }); }
 
-// --- Gamepad ---------------------------------------------------------------------------------
-function pollPad() {
-  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-  const gp = [...pads].find(Boolean);
-  const P = INPUT.pad;
-  P.aEdge = false;
-  if (!gp) { P.x = P.y = 0; P.a = false; return; }
-  const dz = v => (Math.abs(v) < 0.2 ? 0 : v);
-  P.x = dz(gp.axes[0] || 0) + (gp.buttons[15]?.pressed ? 1 : 0) - (gp.buttons[14]?.pressed ? 1 : 0);
-  P.y = dz(gp.axes[1] || 0) + (gp.buttons[13]?.pressed ? 1 : 0) - (gp.buttons[12]?.pressed ? 1 : 0);
-  const btn = i => !!gp.buttons[i]?.pressed;
-  const edge = i => btn(i) && !P.prev[i];
-  P.a = btn(0); P.aEdge = edge(0);
-  if (MODE === 'dialog') { if (edge(0)) advanceDialog(); for (let i = 0; i < gp.buttons.length; i++) P.prev[i] = btn(i); return; }
-  if (MODE === 'play') {
-    if (edge(9) || edge(8)) UI.openPause();
-  } else if (MODE !== 'panic' && MODE !== 'cine') {
-    if (edge(12)) navMove(0, -1); if (edge(13)) navMove(0, 1); if (edge(14)) navMove(-1, 0); if (edge(15)) navMove(1, 0);
-    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
-    P.stickT = (P.stickT || 0) - 1;
-    if (P.stickT <= 0 && (Math.abs(ax) > 0.6 || Math.abs(ay) > 0.6)) { P.stickT = 12; Math.abs(ax) > Math.abs(ay) ? navMove(Math.sign(ax), 0) : navMove(0, Math.sign(ay)); }
-    if (edge(0)) document.activeElement?.click();
-    if (edge(1) && UI.back) UI.back();
-    if (edge(9) && MODE === 'pause') UI.resume();
-    if (MODE === 'levelup' && edge(3)) UI.reroll();
+// --- Gamepad: menu, dialoghi e pausa (il movimento in gioco passa da readInput) -----------
+function padMenus() {
+  for (let i = 0; i < 4; i++) {
+    const P = PADS[i];
+    if (!P.on) continue;
+    if (MODE === 'dialog') { if (P.aEdge) advanceDialog(); continue; }
+    if (MODE === 'play') { if (P.startEdge) UI.openPause(); continue; }
+    if (MODE === 'panic' || MODE === 'cine') continue;
+    if (UI.current === 's-lobby') { UI.lobbyPad(i, P); continue; }
+    if (P.uEdge) navMove(0, -1); if (P.dEdge) navMove(0, 1); if (P.lEdge) navMove(-1, 0); if (P.rEdge) navMove(1, 0);
+    if (P.aEdge) document.activeElement?.click();
+    if (P.bEdge && UI.back) UI.back();
+    if (P.startEdge && MODE === 'pause') UI.resume();
+    if (MODE === 'levelup' && P.ybEdge) UI.reroll();
   }
-  for (let i = 0; i < gp.buttons.length; i++) P.prev[i] = btn(i);
 }
 
-function moveVec() {
-  let x = 0, y = 0;
-  for (const [k, [dx, dy]] of Object.entries(MOVE_KEYS)) if (INPUT.keys[k]) { x += dx; y += dy; }
-  x += INPUT.touch.dx + INPUT.pad.x; y += INPUT.touch.dy + INPUT.pad.y;
-  const l = Math.hypot(x, y);
-  if (l > 1) { x /= l; y /= l; }
-  return [x, y];
-}
-const abilityHeld = () => !!INPUT.keys.Space || INPUT.abilityTouch || INPUT.pad.a;
-const abilityPressed = () => !!INPUT.pressed.Space || INPUT.abilityTouchEdge || INPUT.pad.aEdge;
+// Usate dalle abilità (attacco di panico ecc.): input del giocatore attivo
+const curIn = () => (G && G.cur && G.cur.in) || { x: 0, y: 0, held: false, pressed: false };
+const abilityHeld = () => !!curIn().held;
+const abilityPressed = () => !!curIn().pressed;
 
 // --- Avvio run ---------------------------------------------------------------------------------
-function startRun(charId, stageId, mode = 'extra') {
+// party: id del personaggio (singolo) oppure [{ char, dev }] per la co-op
+const STORY20 = { elites: [300, 600, 900], boss: 1080, cont: 1320, mood: 600, moodKills: 2, horde: true };
+const ENDLESS_T = { elites: [150], boss: 300, cont: Infinity, mood: 200, moodKills: 1, horde: true };
+function startRun(party, stageId, mode = 'story') {
   if (!TILES) initTiles();
-  const ch = CHARS[charId];
+  if (typeof party === 'string') party = [{ char: party, dev: 'solo' }];
   G = {
-    char: ch, stage: STAGES[stageId],
-    p: { x: 0, y: 0, r: 5, hp: 0, maxHp: 0, invuln: 1.2, fx: 1, fy: 0, mx: 0, my: 0, moving: false, still: 0, rx: 0, ry: 0, vx: 0, vy: 0, jumpT: 0, flyHigh: 0, flyT: 0, slowT: 0 },
-    t: 0, frame: 0, kills: 0, level: 1, xp: 0, xpNext: xpNeed(1), pendingLv: 0,
-    weapons: [], passives: [], charms: [], boons: { attack: null, special: null, cast: null },
-    enemies: [], projs: [], eprojs: [], gems: [], pickups: [], fx: [], zones: [], blocks: [], coins: [], pillars: [], flies: [], hist: [],
-    dmgDealt: 0, thread: 0, straw: 0, nodes: 0, elitesKilled: 0, order: 0, spawnAcc: 0, firedElite: [],
-    dmgTakenMul: 1, prayerLock: 0, shakeT: 0, hitT: 99, invertT: 0, rerolls: ch.id === 'isaac' ? 4 : 2,
-    banner: null, bossE: null, won: false, over: false, touch: document.body.classList.contains('touch'),
+    stage: STAGES[stageId], players: [], cur: null,
+    t: 0, frame: 0, kills: 0, level: 1, xp: 0, xpNext: xpNeed(1), pendingLv: 0, lvQueue: [],
+    enemies: [], projs: [], eprojs: [], gems: [], pickups: [], fx: [], zones: [], blocks: [],
+    dmgDealt: 0, thread: 0, straw: 0, nodes: 0, elitesKilled: 0, spawnAcc: 0, firedElite: [],
+    shakeT: 0, invertT: 0, banner: null, bossE: null, won: false, over: false, touch: document.body.classList.contains('touch'),
     mode, teles: [], lights: [], amb: [], evT: 45, evIdx: Math.floor(rnd(4)), event: null, spawnBoost: 1, gemsTaken: 0,
+    segStart: 0, loop: 0, hordeT: 150, brkT: 6, curse: 1, center: { x: 0, y: 0 },
   };
+  party.forEach((m, i) => G.players.push(makeSlot(i, m.char, m.dev)));
+  const n = G.players.length;
+  G.players.forEach((pl, i) => {
+    loadPl(pl);
+    const ch = pl.char;
+    const a = n > 1 ? -Math.PI / 2 + i / n * TAU : 0;
+    G.p.x = n > 1 ? Math.cos(a) * 22 : 0; G.p.y = n > 1 ? Math.sin(a) * 16 : 0; G.p.pl = pl;
+    G.rerolls += (META.up.reroll || 0);
+    ch.init(G.p);
+    G.weapons.push({ id: ch.start, lvl: 1, t: 0.6, cdMax: 1, order: G.order++ });
+    recalc();
+    G.p.hp = ch.hpMode === 'anxiety' ? 0 : G.p.maxHp;
+    G.p.revives = powerLvl('revival');
+    if (ch.id === 'isaac') G.ist = isaacStats();
+    if (ch.id === 'v1') { G.activeGun = 'revolver'; G.gunT = 2.6; }
+    savePl(pl);
+  });
+  loadPl(G.players[0]);
+  G.curse = G.s.curse || 1;
   const stg = STAGES[stageId];
-  G.times = stg.story ? STORY_TIMES : (mode === 'story' && stageId === 'telaio' ? { elites: [100], boss: 240, cont: 420 } : TIMES);
+  G.times = mode === 'endless' ? ENDLESS_T : mode === 'story' ? STORY20 : (stg.story ? STORY_TIMES : TIMES);
   const sc = STORY.find(x => x.id === stageId);
-  G.chapter = mode === 'story' && sc ? sc.chap.toUpperCase() + ' · ' + sc.label.toUpperCase() : '';
-  G.rerolls += (META.up.reroll || 0);
-  ch.init(G.p);
-  G.weapons.push({ id: ch.start, lvl: 1, t: 0.6, cdMax: 1, order: G.order++ });
-  recalc();
-  G.p.hp = ch.hpMode === 'anxiety' ? 0 : G.p.maxHp;
-  if (ch.id === 'isaac') G.ist = isaacStats();
+  G.chapter = mode === 'story' && sc ? sc.chap.toUpperCase() + ' · ' + sc.label.toUpperCase() : mode === 'endless' ? 'ENDLESS · PUNTO 1' : '';
+  if (mode === 'endless') { G.order8 = endlessOrder(stageId); G.loop = 1; }
   G.stage.init();
-  if (ch.id === 'v1') { G.activeGun = 'revolver'; G.gunT = 2.6; }
+  updateCenter();
   MODE = 'play';
   UI.hideAll();
+  const ch = G.char;
   const intro = [];
-  if (CHAPTER_INTRO[stageId]) intro.push(['cucitrice', fillVars(CHAPTER_INTRO[stageId])]);
+  if (mode === 'endless') intro.push(...ENDLESS_INTRO.map(l => [l[0], fillVars(l[1])]));
+  else if (CHAPTER_INTRO[stageId]) intro.push(['cucitrice', fillVars(CHAPTER_INTRO[stageId])]);
   if (WORLD_NATIVE[stageId] === ch.id && HOME_ARRIVE[ch.id]) intro.push(...HOME_ARRIVE[ch.id]);
   else intro.push([CHAR_SELECT[ch.id][0][0] === 'deogracias' || CHAR_SELECT[ch.id][0][0] === 'guide' ? (ch.id === 'penitent' ? 'penitent' : 'terrarian') : ch.id, pick(CHAR_ARRIVE[ch.id])]);
-  startDialog(intro, () => banner(G.stage.name.toUpperCase(), G.stage.tagline, 3, '#e2b04a'));
+  if (n > 1) intro.push(...coopIntro());
+  startDialog(intro, () => banner(G.stage.name.toUpperCase(), n > 1 ? n + ' giocatori · rianimate i compagni a terra restando vicini' : G.stage.tagline, 3, '#e2b04a'));
 }
+const segT = () => G.t - (G.segStart || 0);
 
 // --- Aggiornamento ------------------------------------------------------------------------------
-function update(dt) {
+function updatePlayer(pl, dt) {
   const p = G.p, ch = G.char;
-  G.t += dt; G.frame++;
+  const IN = pl.in = readInput(pl);
   G.dmgTakenMul = 1; G.auraSlow = null;
   if (G.recoilT > 0) G.recoilT -= dt; if (G.switchAnim > 0) G.switchAnim -= dt;
   if (p.castT > 0) p.castT -= dt; if (p.atk) p.atk.t -= dt;
-  if (G.invertT > 0) G.invertT -= dt;
-  if (G.shakeT > 0) G.shakeT = Math.max(0, G.shakeT - dt * 20);
-  if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
   G.hitT += dt;
   p.invuln = Math.max(0, p.invuln - dt);
+  if (p.ultInv > 0) p.ultInv -= dt;
   p.jumpT -= dt; p.flyHigh -= dt; if (p.slowT > 0) p.slowT -= dt;
+  // rigenerazione della Merceria
+  if (G.s.regen > 0 && ch.hpMode !== 'anxiety') {
+    p.regenAcc += G.s.regen * dt * (ch.hpMode === 'hp' ? 1 : 0.02);
+    if (p.regenAcc >= 1) { const n = Math.floor(p.regenAcc); p.regenAcc -= n; if (p.hp < p.maxHp - (p.hard || 0)) p.hp = Math.min(p.maxHp - (p.hard || 0), p.hp + n); }
+  }
 
   // Movimento
-  let [mx, my] = moveVec();
+  let mx = IN.x, my = IN.y;
   if (G.invertT > 0) { mx = -mx; my = -my; }
   p.moving = !!(mx || my);
   if (p.moving) { const [nx, ny] = norm(mx, my); p.mx = nx; p.my = ny; p.fx = nx; p.fy = ny; p.still = 0; } else p.still += dt;
   const focusing = p.focusT > 0;
   const inPool = G.zones.some(z => z.type === 'slowpool' && d2(z.x, z.y, p.x, p.y) < z.r * z.r * 0.5);
-  const spd = ch.speed * G.s.speed * (ch.speedMul ? ch.speedMul() : 1) * (p.flyT > 0 ? 1.6 : 1) * (p.slowT > 0 || inPool ? 0.6 : 1) * (focusing ? 0 : 1) * (carrying() ? 0.75 : 1);
+  const spd = ch.speed * G.s.speed * (ch.speedMul ? ch.speedMul() : 1) * (p.flyT > 0 ? 1.6 : 1) * (p.slowT > 0 || inPool ? 0.6 : 1) * (focusing ? 0 : 1) * (carrying() === pl ? 0.75 : 1);
   if (p.dash) {
     const d = p.dash;
     p.x += d.dx * d.sp * dt; p.y += d.dy * d.sp * dt;
@@ -214,13 +223,15 @@ function update(dt) {
   if (p.moving && (G.stepT = (G.stepT || 0) - dt) <= 0) { G.stepT = 0.22; G.fx.push({ k: 'p', x: p.x + rnd(-3, 3), y: p.y + 8, vx: -p.mx * 10, vy: -6, life: 0.35, max: 0.35, col: 'rgba(200,190,170,.6)', size: 2 }); }
   while (G.hist.length && G.hist[0].t < G.t - 2.5) G.hist.shift();
 
-  ch.ability(dt, abilityHeld(), abilityPressed());
+  ch.ability(dt, IN.held, IN.pressed);
   ch.update(dt);
+  if (IN.sw && ch.id === 'v1') switchGun();
+  if (IN.ult) tryUltimate();
+  updateUltimate(dt);
 
-  GRID.build(G.enemies);
   G.silenced = G.zones.some(z => z.type === 'silence' && d2(z.x, z.y, p.x, p.y) < z.r * z.r);
   if (ch.id === 'v1') { G.gunT -= dt; if (G.gunT <= 0) switchGun(); }
-  const wdt = carrying() ? dt * 0.75 : dt;
+  const wdt = carrying() === pl ? dt * 0.75 : dt;
   if (!G.silenced) for (const w of G.weapons) {
     if (w.disabled) continue;
     if (ch.id === 'v1' && WEAPONS[w.id].gun && w.id !== G.activeGun) { w.t = Math.max(0, w.t - wdt); continue; }
@@ -228,13 +239,30 @@ function update(dt) {
   }
   for (const co of G.coins) co.life -= dt;
   G.coins = G.coins.filter(co => co.life > 0);
+  for (const z of G.zones) if (z.type === 'lava' && !(p.flyT > 0) && d2(z.x, z.y, p.x, p.y) < z.r * z.r * 0.4) hurtPlayer(10, null);
+}
+
+function update(dt) {
+  G.t += dt; G.frame++;
+  if (G.invertT > 0) G.invertT -= dt;
+  if (G.shakeT > 0) G.shakeT = Math.max(0, G.shakeT - dt * 20);
+  if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
+
+  GRID.build(G.enemies);
+  for (const pl of G.players) {
+    if (pl.down) { pl.in = readInput(pl); continue; }
+    usePl(pl);
+    updatePlayer(pl, dt);
+  }
+  usePl(leadPl());
+  updateSquad(dt);
+  updateCenter();
 
   updateProjs(dt);
   updateEnemies(dt);
   updateEProjs(dt);
   for (const z of G.zones) {
     z.t -= dt;
-    if (z.type === 'lava' && !(p.flyT > 0) && d2(z.x, z.y, p.x, p.y) < z.r * z.r * 0.4) hurtPlayer(10, null);
     if (z.type === 'fire') { z.k -= dt; if (z.k <= 0) { z.k = 0.3; for (const e of enemiesIn(z.x, z.y, z.r)) hurtEnemy(e, z.dmg, { silent: true, src: z.src, burn: z.dmg * 0.5 }); } }
   }
   G.zones = G.zones.filter(z => z.t > 0);
@@ -243,6 +271,7 @@ function update(dt) {
   updateTeles(dt);
   updateEvent(dt);
   updateAmbient(dt);
+  updateProps(dt);
   G.idleBark = (G.idleBark ?? 40) - dt; if (G.idleBark <= 0) { G.idleBark = 38 + rnd(20); if (!G.bark) bark('idle'); }
 
   if (G.unravel) {
@@ -252,8 +281,8 @@ function update(dt) {
 
   spawner(dt);
   events();
+  updateHordes(dt);
   updateGems(dt);
-  G.thread += 0;
 
   for (const f of G.fx) { f.life -= dt; if (f.k === 'p') { f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.92; f.vy *= 0.92; } }
   G.fx = G.fx.filter(f => f.life > 0);
@@ -271,18 +300,23 @@ function update(dt) {
     banner('VITTORIA', ETYPES[G.bossE.type].name + ' è stato scucito', 3, '#ffd23f');
     fxParticles(G.bossE.x, G.bossE.y, '#ffd23f', 60, 200, 1.2, 2);
     shake(8); sfx('evo'); G.flashW = 0.8; G.hitStop = 0.4;
-    for (const e of G.enemies) if (!e.boss) { e.dead = true; e.noXp = true; fxParticles(e.x, e.y, e.blood || '#fff', 3, 40, 0.3); }
+    for (const e of G.enemies) if (!e.boss && !e.prop) { e.dead = true; e.noXp = true; fxParticles(e.x, e.y, e.blood || '#fff', 3, 40, 0.3); }
     G.eprojs = []; G.teles = [];
+    // tutti i giocatori a terra si rialzano
+    for (const pl of G.players) if (pl.down) { pl.down = false; withPl(pl, () => { G.p.hp = G.char.hpMode === 'anxiety' ? 30 : Math.max(1, Math.ceil(G.p.maxHp * 0.4)); G.p.invuln = 2; }); }
+    if (G.mode === 'endless') for (let i = 0; i < 3; i++) dropPickup(i ? 'pk_purse' : 'chest', G.bossE.x + (i - 1) * 16, G.bossE.y);
   }
   if (G.winT !== undefined && G.won) {
     G.winT -= dt;
     if (G.winT <= 0 && !G.afterWin) {
       G.afterWin = true;
-      const T = BOSS_TALK[G.bossE.type];
       const lines = bossDefeatLines(G.bossE.type);
-      const fin = G.stage.id === 'finale' && G.mode === 'story' ? ENDINGS[G.char.id] : [];
       bark('boss');
-      startDialog([...lines, ...fin], () => endRun(true));
+      if (G.mode === 'endless') { startDialog([...lines, ...endlessFragment()], () => nextLoop()); }
+      else {
+        const fin = G.stage.id === 'finale' && G.mode === 'story' ? ENDINGS[G.char.id] : [];
+        startDialog([...lines, ...fin], () => endRun(true));
+      }
     }
   }
 
@@ -291,16 +325,20 @@ function update(dt) {
 
 function spawner(dt) {
   if (G.won) return;
+  const n = G.players.length;
   const alive = G.enemies.length;
-  G.spawnAcc += dt * (1.4 + G.t / 36) * (G.spawnMul || 1) * (G.spawnBoost || 1) * (G.bossE ? 0.3 : 1);
+  const t = Math.min(G.t, 1500);
+  const rate = 1.4 + Math.min(t, 600) / 36 + Math.max(0, t - 600) / 85;
+  G.spawnAcc += dt * rate * (1 + 0.35 * (n - 1)) * (G.curse || 1) * (G.spawnMul || 1) * (G.spawnBoost || 1) * (G.bossE ? 0.3 : 1);
+  const cap = 300 + 40 * (n - 1);
   while (G.spawnAcc >= 1) {
     G.spawnAcc -= 1;
-    if (alive >= 300) { G.spawnAcc = 0; break; }
-    const table = G.stage.table(G.t);
+    if (alive >= cap) { G.spawnAcc = 0; break; }
+    const table = spawnTable();
     const tot = table.reduce((a, [, w]) => a + w, 0);
     let r = rnd(tot), type = table[0][0];
-    for (const [t, w] of table) { r -= w; if (r <= 0) { type = t; break; } }
-    const p = G.p;
+    for (const [tt, w] of table) { r -= w; if (r <= 0) { type = tt; break; } }
+    const p = G.center;
     if (type === 'ticket') {
       const a = rnd(TAU);
       const [x, y] = G.stage.spawnPos(a);
@@ -312,30 +350,51 @@ function spawner(dt) {
       spawnEnemy(type, x, y);
     } else {
       const [x, y] = G.stage.spawnPos(rnd(TAU));
-      spawnEnemy(type, x, y);
+      const e = spawnEnemy(type, x, y);
+      // dopo il minuto 12, alcuni nemici sono "rinforzati": più grandi, più resistenti, più esperienza
+      if (segT() > 720 && Math.random() < Math.min(0.25, (segT() - 720) / 2400) && !ETYPES[type].elite) { e.big = 1.3; e.hp *= 3.2; e.maxHp = e.hp; e.xp *= 4; e.dmg *= 1.3; e.armored = true; }
     }
   }
+}
+// Tabella dei nemici: quella del mondo, più "intrusi" da altri mondi nelle run lunghe
+function spawnTable() {
+  const base = G.stage.table(segT());
+  const t = segT();
+  if (!G.stage.world || t < 420) return base;
+  if (!G.intruders || G.intrudersFor !== G.stage.id) {
+    const others = Object.keys(WORLDS).filter(k => k !== G.stage.id && k !== 'finale');
+    G.intruders = pick(others); G.intrudersFor = G.stage.id;
+  }
+  const extra = WORLDS[G.intruders].table(999).map(([k, w]) => [k, w * (t < 840 ? 0.25 : 0.5)]);
+  return base.concat(extra);
 }
 
 function events() {
   const st = G.stage;
   const T = G.times;
-  T.elites.forEach((t, i) => {
-    if (G.t >= t && !G.firedElite[i] && !G.bossE) {
+  const t = segT();
+  T.elites.forEach((et, i) => {
+    if (t >= et && !G.firedElite[i] && !G.bossE) {
       G.firedElite[i] = true;
+      // nella Storia da 20 minuti il mini-boss di metà run arriva da un altro mondo
+      let type = st.elite;
+      if (G.mode === 'story' && st.world && i === 1) { const o = WORLDS[pick(Object.keys(WORLDS).filter(k => k !== st.id && k !== 'finale'))]; type = o.mini; }
       const [x, y] = st.spawnPos(rnd(TAU));
-      const el = spawnEnemy(st.elite, x, y);
-      const isMini = !!BOSSES[st.elite];
-      banner((isMini ? 'MINI-BOSS: ' : 'ÉLITE: ') + ETYPES[st.elite].name.toUpperCase(), 'Sconfiggilo per aprire uno Strappo', 2.4, '#e0303a');
-      if (isMini) { G.titleCard = { name: ETYPES[st.elite].name, title: 'MINI-BOSS', t: 2.2, max: 2.2, col: BOSSES[st.elite].col }; sfx('boom'); el.wait = 1.5; }
+      const el = spawnEnemy(type, x, y);
+      if (i === 2) { el.hp *= 1.5; el.maxHp = el.hp; }
+      const isMini = !!BOSSES[type];
+      banner((isMini ? 'MINI-BOSS: ' : 'ÉLITE: ') + ETYPES[type].name.toUpperCase(), i === 1 && G.mode === 'story' ? 'Un intruso da un\'altra toppa' : 'Sconfiggilo per aprire uno Strappo', 2.4, '#e0303a');
+      if (isMini) { G.titleCard = { name: ETYPES[type].name, title: 'MINI-BOSS', t: 2.2, max: 2.2, col: BOSSES[type].col }; sfx('boom'); el.wait = 1.5; }
     }
   });
-  if (G.t >= T.boss && !G.bossE) {
+  if (t >= T.boss - 30 && !G.bossWarn && !G.bossE) { G.bossWarn = true; banner('IL BOSS SI AVVICINA', 'Trenta secondi: preparati', 2.4, '#e0303a'); sfx('bell'); }
+  if (t >= T.boss && !G.bossE) {
+    const c = G.center;
     const [x, y] = st.spawnPos(rnd(TAU));
-    const near = BOSSES[st.boss] ? G.stage.clampPos(G.p.x + Math.cos(rnd(TAU)) * 150, G.p.y + Math.sin(rnd(TAU)) * 110) : [x, y];
+    const near = BOSSES[st.boss] ? G.stage.clampPos(c.x + Math.cos(rnd(TAU)) * 150, c.y + Math.sin(rnd(TAU)) * 110) : [x, y];
     G.bossE = spawnEnemy(st.boss, near[0], near[1]);
     G.bossE.wait = 1.2;
-    for (const e of G.enemies) if (!e.boss && !e.elite && !e.anchored && d2(e.x, e.y, G.p.x, G.p.y) < 200 * 200) { e.dead = true; e.noXp = true; fxParticles(e.x, e.y, '#ffffff', 3, 40, 0.3); }
+    for (const e of G.enemies) if (!e.boss && !e.elite && !e.anchored && !e.prop && d2(e.x, e.y, c.x, c.y) < 200 * 200) { e.dead = true; e.noXp = true; fxParticles(e.x, e.y, '#ffffff', 3, 40, 0.3); }
     G.eprojs = [];
     shake(6); sfx('boom'); G.flashW = 0.5;
     const def = BOSSES[st.boss];
@@ -346,7 +405,7 @@ function events() {
       banner('', st.bossSub, 3.6, '#e0303a');
     });
   }
-  if (G.t >= T.cont && !G.contE && !G.won) {
+  if (t >= T.cont && !G.contE && !G.won) {
     const [x, y] = st.spawnPos(rnd(TAU));
     G.contE = spawnEnemy('cont', x, y);
     banner('IL CONTINUE', 'Non puoi vincere. Puoi solo scappare.', 3, '#ff5a4a');
@@ -374,23 +433,29 @@ function switchGun() {
 
 // --- Attacco di panico --------------------------------------------------------------------------
 function updatePanic(dt) {
-  const P = G.panic, p = G.p;
-  P.t -= dt; P.ph += dt;
-  P.fv += (abilityHeld() ? 2.6 : -1.9) * dt;
-  P.fv = clamp(P.fv, -1.3, 1.3);
-  P.fy += P.fv * dt;
-  if (P.fy < 0) { P.fy = 0; P.fv = 0; } if (P.fy > 1) { P.fy = 1; P.fv = 0; }
-  const boxC = 0.5 + 0.3 * Math.sin(P.ph * 1.3);
-  if (Math.abs(P.fy - boxC) < P.size / 2) P.prog += dt / 3; else P.prog -= dt / 6;
-  if (P.prog >= 1) {
-    p.hp = 40; p.invuln = 2.5; p.panicWins++;
-    MODE = 'play'; G.panic = null;
-    aoe(p.x, p.y, 70, 20, { kb: 260 }, '#ff7ad9');
-    banner('…OK. SONO ANCORA QUI.', p.panicWins === 1 ? 'Ora puoi trovare il passivo Accettazione' : 'Madeline', 2.2, '#ff7ad9');
-  } else if (P.prog <= 0 || P.t <= 0) {
-    G.panic = null;
-    endRun(false, 'panic');
-  }
+  const P = G.panic;
+  const pl = P.pl || (P.pl = G.players.find(x => x.char.id === 'madeline' && !x.down && x.p.hp >= 99) || G.cur);
+  withPl(pl, () => {
+    const p = G.p;
+    pl.in = readInput(pl);
+    P.t -= dt; P.ph += dt;
+    P.fv += (abilityHeld() ? 2.6 : -1.9) * dt;
+    P.fv = clamp(P.fv, -1.3, 1.3);
+    P.fy += P.fv * dt;
+    if (P.fy < 0) { P.fy = 0; P.fv = 0; } if (P.fy > 1) { P.fy = 1; P.fv = 0; }
+    const boxC = 0.5 + 0.3 * Math.sin(P.ph * 1.3);
+    if (Math.abs(P.fy - boxC) < P.size / 2) P.prog += dt / 3; else P.prog -= dt / 6;
+    if (P.prog >= 1) {
+      p.hp = 40; p.invuln = 2.5; p.panicWins++;
+      MODE = 'play'; G.panic = null;
+      aoe(p.x, p.y, 70, 20, { kb: 260 }, '#ff7ad9');
+      banner('…OK. SONO ANCORA QUI.', p.panicWins === 1 ? 'Ora puoi trovare il passivo Accettazione' : 'Madeline', 2.2, '#ff7ad9');
+    } else if (P.prog <= 0 || P.t <= 0) {
+      G.panic = null;
+      if (coop()) { MODE = 'play'; downPlayer(); }
+      else endRun(false, 'panic');
+    }
+  });
 }
 
 // --- Ciclo ---------------------------------------------------------------------------------------
@@ -398,7 +463,8 @@ let last = performance.now();
 function frame(now) {
   let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  pollPad();
+  pollPads();
+  padMenus();
   if (!G && MODE === 'dialog') updateDialog(dt);
   if (G) {
     if (MODE === 'play') {
@@ -414,7 +480,7 @@ function frame(now) {
   render(ctx);
   UI.tick(dt);
   INPUT.pressed = {};
-  INPUT.abilityTouchEdge = false;
+  INPUT.abilityTouchEdge = false; INPUT.ultTouchEdge = false;
   requestAnimationFrame(frame);
 }
 
