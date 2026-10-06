@@ -1,4 +1,5 @@
 'use strict';
+(() => {
 // =============================================================================
 // ART4 · OGGETTI (items) — orb di esperienza per personaggio (4 tier × 2 frame),
 // pickup speciali, oggetti distruttibili (luci di scena), icone delle Ultimate
@@ -7,7 +8,6 @@
 // dall'alto a sinistra, 3-5 toni per materiale, contorno di 1 px selettivo.
 // Registra solo tramite regSprite (SPR); nessun nome globale nuovo.
 // =============================================================================
-(() => {
   const OUT = '#1a1220';
   const RGB = {};
   const rgb = h => RGB[h] || (RGB[h] = [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
@@ -414,8 +414,9 @@
     const sp = bake(d.B, d.pulse ? up(d.pal, d.pulse) : d.pal, Object.assign({ over: over1 }, o));
     reg('gem_' + k + '_' + t, base);
     reg('gem_' + k + '_' + t + '_s', sp);
-    if (t === 0) reg('gem_' + k, base);
-    if (t === 2) reg('gemb_' + k, base);
+    // compatibilità: gem_<k> = tier 0, gemb_<k> = tier 2 (stesso oggetto, niente doppioni)
+    if (t === 0) SPR['gem_' + k] = SPR['gem_' + k + '_0'];
+    if (t === 2) SPR['gemb_' + k] = SPR['gem_' + k + '_2'];
   });
 
   // ===========================================================================
@@ -807,22 +808,22 @@
   // Urlo dell'Abisso: volto di Vuoto (maschera del Cavaliere in negativo) che urla,
   // con lingue d'ombra che salgono orlate di bianco
   U18('ult_knight', [
-    '.w.....ww.....w.',
-    '.Kw...wKKw...wK.',
-    '..Kw.wKKKKw.wK..',
-    '..KKwKKKKKKwKK..',
-    '.KKKKKKKKKKKKKK.',
-    'KKkkkkkkkkkkkkKK',
-    'KkWWkkkkkkkkWWkK',
-    'KkWWWkkkkkkWWWkK',
+    '.....w....w.....',
+    '..w..Kw..wK..w..',
+    '..Kw.KK..KK.wK..',
+    '...KwKKwwKKwK...',
+    '..KKKKKKKKKKKK..',
+    '.KKkkkkkkkkkkKK.',
+    '.KkWWkkkkkkWWkK.',
     'KkkWWWkkkkWWWkkK',
-    'KkkkWkkkkkkWkkkK',
+    'KkkkWWWkkWWWkkkK',
+    'KkkkkWkkkkWkkkkK',
     '.KkkkkWWWWkkkkK.',
     '.KkkkWkkkkWkkkK.',
     '..KkkWkkkkWkkK..',
-    '..KkkWkkkkWkkK..',
-    '...KkkWWWWkkK...',
-    '....KKKKKKKK....'], { k: '#0b0910', K: '#2e2840', W: '#f4f0ff', w: '#c8c0e8' }, { ol: '#9a90c0', olc: { w: null } });
+    '...KkWkkkkWkK...',
+    '....KkWWWWkK....',
+    '.....KKKKKK.....'], { k: '#0b0910', K: '#2e2840', W: '#f4f0ff', w: '#c8c0e8' }, { ol: '#9a90c0', olc: { w: null } });
 
   // Railcannon elettrico: cannone di V1 e raggio blu con fulmini
   U18('ult_v1', [

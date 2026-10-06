@@ -65,8 +65,10 @@ function buyUlt(id) {
 }
 // icona del potenziamento: sprite disegnato (art4_items) se c'è, altrimenti icona generica
 const PU_FALLBACK = { might: ['sword', '#c9ced8', '#6b7085'], armor: ['shield', '#9aa6b8', '#3a3550'], hp: ['heart', '#e0303a', '#5a1e24'], recovery: ['heart', '#6aff8a', '#2a5a3a'], cooldown: ['clock', '#bfe4ff', '#3a86d0'], area: ['ring', '#e2b04a', '#8a5a2a'], duration: ['clock', '#c9a6ff', '#4a2a6a'], speed: ['feather', '#5fb3ff', '#22305a'], magnet: ['magnet', '#e2b04a', '#8a5a2a'], luck: ['coin', '#7aff9a', '#2a5a3a'], growth: ['crystal', '#ff9ad9', '#4aa0ff'], greed: ['coin', '#ffd23f', '#8a5a2a'], curse: ['skull', '#c96aff', '#3a1a4a'], revival: ['knife', '#ffd23f', '#8e2b3a'], reroll: ['knife', '#efe6d2', '#8e2b3a'] };
+const PU_SPR = { speed: 'pu_move', hp: 'pu_maxhp' };
 function puIconURL(id, k = 3) {
-  if (SPR['pu_' + id]) return spriteURL('pu_' + id, k);
+  const sp = PU_SPR[id] && SPR[PU_SPR[id]] ? PU_SPR[id] : 'pu_' + id;
+  if (SPR[sp]) return spriteURL(sp, k);
   const f = PU_FALLBACK[id] || ['star', '#ffd23f', '#8a5a2a'];
   return iconURL(f[0], f[1], f[2], k);
 }
