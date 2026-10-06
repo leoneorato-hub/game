@@ -973,3 +973,20 @@ File in `godot/`:
 | `scripts/debug/test_arena.gd` | Arena di prova autosufficiente (nessun asset richiesto): genera ondate di nemici e disegna tutto con primitive |
 
 Aprire `godot/project.godot` con Godot 4.3+ e premere **F5**: la scena `test_arena.tscn` avvia il prototipo (WASD per muoversi).
+
+---
+
+## 9. Alfa 0.1 (web)
+
+La prima build giocabile vive in `web/`: HTML5 canvas a 640×360 con scaling pixel-perfect e nessuna dipendenza.
+
+| Area | Stato nell'alfa |
+|---|---|
+| Durata run | Ridotta: élite a 1:30, 3:00 e 4:30, boss a 6:00, IL CONTINUE a 10:00 (il design finale resta di 30 minuti) |
+| Roster | 8/8 personaggi con risorsa, abilità natia, kit di 3–6 armi, passivi propri, sinergie ed evoluzioni |
+| Stage | 3/3 stage con pericoli (navette e strappi; treni e ora di punta; rintocchi e onde di risonanza), élite e boss. Lo stage segreto *Titoli di Coda* non è ancora presente |
+| UI | Filo dell'esperienza, Anello del Telaio con fili delle sinergie, risorse native per personaggio, pannello di contesto, Tavolo delle Toppe con Mappa delle Trame, pausa, rendiconto |
+| Rimandati | Meta-progressione (Merceria), Duetti del Multiverso, co-op, musica |
+
+Gli sprite sono pixel-art originale definita in codice (`web/js/sprites.js`) e ricevono in automatico il contorno d'inchiostro della Regola della Cucitura.
+
