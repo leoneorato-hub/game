@@ -12,8 +12,11 @@
 // =============================================================================
 (() => {
   const HEX = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
-  const LV = (() => { const v = [-0.55, -0.72, 0.6], l = Math.hypot(v[0], v[1], v[2]); return v.map(a => a / l); })();
-  const lit = (nx, ny, nz) => { const l = Math.hypot(nx, ny, nz) || 1; return 0.26 + 0.7 * Math.max(-0.2, (nx * LV[0] + ny * LV[1] + nz * LV[2]) / l); };
+  const LV = (() => { const v = [-0.55, -0.72, 0.6], l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); return v.map(a => a / l); })();
+  const LX = LV[0], LY = LV[1], LZ = LV[2];
+  const lit = (nx, ny, nz) => { const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1, d = (nx * LX + ny * LY + nz * LZ) / l; return 0.26 + 0.7 * (d > -0.2 ? d : -0.2); };
+  const RGB = {};
+  const rgbOf = h => RGB[h] || (RGB[h] = HEX(h));
   const MAT = (r, o = {}) => Object.assign({ r }, o);
   const N4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
@@ -77,16 +80,26 @@
       }, m, o);
     }
     poly(pts, m, o = {}) {
-      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-      const X0 = Math.min(...xs), X1 = Math.max(...xs), Y0 = Math.min(...ys), Y1 = Math.max(...ys);
+      // scanline: per ogni riga si calcolano una volta gli attraversamenti dei lati
+      const n = pts.length;
+      let X0 = Infinity, X1 = -Infinity, Y0 = Infinity, Y1 = -Infinity;
+      for (let i = 0; i < n; i++) { const p = pts[i]; if (p[0] < X0) X0 = p[0]; if (p[0] > X1) X1 = p[0]; if (p[1] < Y0) Y0 = p[1]; if (p[1] > Y1) Y1 = p[1]; }
+      const rows = [];
+      for (let y = Math.max(0, Math.floor(Y0)); y <= Math.min(this.h - 1, Math.ceil(Y1)); y++) {
+        const yc = y + 0.5, xs = [];
+        for (let i = 0, j = n - 1; i < n; j = i++) {
+          const yi = pts[i][1], yj = pts[j][1];
+          if ((yi > yc) !== (yj > yc)) xs.push((pts[j][0] - pts[i][0]) * (yc - yi) / (yj - yi) + pts[i][0]);
+        }
+        rows[y] = xs;
+      }
       const cx = o.cx ?? (X0 + X1) / 2, cy = o.cy ?? (Y0 + Y1) / 2, hw = (X1 - X0) / 2 || 1, hh = (Y1 - Y0) / 2 || 1, fl = o.fl ?? 0.6;
       return this.fill(X0, Y0, X1, Y1, (x, y) => {
-        let inside = false;
-        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-          const [xi, yi] = pts[i], [xj, yj] = pts[j];
-          if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
-        }
-        if (!inside) return null;
+        const xs = rows[y - 0.5];
+        if (!xs) return null;
+        let c = 0;
+        for (let q = 0; q < xs.length; q++) if (xs[q] > x) c++;
+        if (!(c & 1)) return null;
         if (o.v) return o.v(x, y);
         const u = clamp((x - cx) / hw, -1, 1), w = clamp((y - cy) / hh, -1, 1);
         return lit(u * fl, w * fl * 0.8, Math.sqrt(Math.max(0.05, 1 - (u * u + w * w) * fl * fl)));
@@ -94,23 +107,23 @@
     }
     rect(x, y, w, h, m, o = {}) { return this.poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], m, o); }
     // pixel singolo / linea (Bresenham) con tono esplicito
-    px(x, y, m, t, o = {}) {
+    px(x, y, m, t, o = {}, same) {
       x = Math.floor(x); y = Math.floor(y);
       if (x < 0 || y < 0 || x >= this.w || y >= this.h) return this;
       const i = y * this.w + x;
       if (o.keep && !this.sid[i]) return this;
-      if (o.only && ![].concat(o.only).includes(this.mt[i])) return this;
+      if (o.only && (Array.isArray(o.only) ? !o.only.includes(this.mt[i]) : o.only !== this.mt[i])) return this;
       if (m === null) { this.sid[i] = 0; this.mt[i] = null; return this; }
-      if (!o.keep) { if (!o.same) this._new(o); this.sid[i] = this.n; }
+      if (!o.keep) { if (!(same || o.same)) this._new(o); this.sid[i] = this.n; }
       this.mt[i] = m; this.tn[i] = t ?? 2; this.fx[i] = 1;
       return this;
     }
-    line(x0, y0, x1, y1, m, t, o = {}) {
+    line(x0, y0, x1, y1, m, t, o = {}, cont) {
       x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
       const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-      let e = dx + dy, first = true;
+      let e = dx + dy, first = !cont;
       for (;;) {
-        this.px(x0, y0, m, t, Object.assign({}, o, { same: o.keep ? false : (!first || o.same) }));
+        this.px(x0, y0, m, t, o, !first);
         first = false;
         if (x0 === x1 && y0 === y1) break;
         const e2 = 2 * e;
@@ -120,7 +133,7 @@
       return this;
     }
     // polilinea
-    path(pts, m, t, o = {}) { for (let i = 1; i < pts.length; i++) this.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], m, t, Object.assign({}, o, { same: o.keep ? false : (i > 1 || o.same) })); return this; }
+    path(pts, m, t, o = {}) { for (let i = 1; i < pts.length; i++) this.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], m, t, o, i > 1); return this; }
     // griglia di caratteri -> pixel (map: char -> [mat, tono] | null per cancellare)
     stamp(x0, y0, rows, map, o = {}) {
       let first = true;
@@ -130,7 +143,7 @@
         const v = map[ch];
         const X = o.flip ? x0 + rows[y].length - 1 - x : x0 + x;
         if (v === null) { this.px(X, y0 + y, null); continue; }
-        this.px(X, y0 + y, v[0], v[1], Object.assign({}, o, { same: o.keep ? false : (!first || o.same) }));
+        this.px(X, y0 + y, v[0], v[1], o, !first);
         first = false;
       }
       return this;
@@ -140,16 +153,22 @@
     bake(o = {}) {
       const { w, h, sid, mt, tn, fx, info } = this;
       const N = w * h;
-      const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : sid[y * w + x]);
-      const mAt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? null : mt[y * w + x]);
+      const sidAt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : sid[y * w + x]);
+      const glowAt = (x, y) => { if (x < 0 || y < 0 || x >= w || y >= h) return false; const m = mt[y * w + x]; return !!(m && m.glow && sid[y * w + x]); };
       // 1) pixel orfani: un tono isolato dentro la stessa forma prende il tono dei vicini
-      const T0 = Int8Array.from(tn);
+      const T0 = Int8Array.from(tn), OFF = [w, -w, 1, -1];
       for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
-        const i = y * w + x, s = sid[i];
-        if (!s || fx[i] || !mt[i] || mt[i].glow) continue;
-        const cnt = {}; let same = 0, nb = 0;
-        for (const [ax, ay] of N4) { const j = (y + ay) * w + x + ax; if (sid[j] !== s || mt[j] !== mt[i]) continue; nb++; if (T0[j] === T0[i]) same++; else cnt[T0[j]] = (cnt[T0[j]] || 0) + 1; }
-        if (nb >= 3 && same === 0) { let bt = T0[i], bc = 0; for (const k in cnt) if (cnt[k] > bc) { bc = cnt[k]; bt = +k; } tn[i] = bt; }
+        const i = y * w + x, s = sid[i], m = mt[i];
+        if (!s || fx[i] || !m || m.glow) continue;
+        let same = 0, nb = 0, t1 = -1, c1 = 0, t2 = -1, c2 = 0;
+        for (let q = 0; q < 4; q++) {
+          const j = i + OFF[q];
+          if (sid[j] !== s || mt[j] !== m) continue;
+          nb++; const tj = T0[j];
+          if (tj === T0[i]) same++;
+          else if (tj === t1 || t1 < 0) { t1 = tj; c1++; } else if (tj === t2 || t2 < 0) { t2 = tj; c2++; }
+        }
+        if (nb >= 3 && same === 0) tn[i] = c1 >= c2 ? t1 : t2;
       }
       const T = Int8Array.from(tn);
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -158,35 +177,37 @@
         if (m.glow) {
           if (fx[i]) continue;
           let d = 1;
-          for (; d < 4; d++) {
-            let out = false;
-            for (const [ax, ay] of N4) { const mm = mAt(x + ax * d, y + ay * d); if (!mm || !mm.glow) { out = true; break; } }
-            if (out) break;
-          }
+          for (; d < 4; d++) if (!glowAt(x, y + d) || !glowAt(x, y - d) || !glowAt(x + d, y) || !glowAt(x - d, y)) break;
           T[i] = clamp((m.base ?? 1) + d - 1, 0, m.r.length - 1);
           continue;
         }
         const inf = info[s];
         if (inf && inf.edge !== undefined && inf.edge !== false) {
           let e = false;
-          for (const [ax, ay] of N4) { const s2 = at(x + ax, y + ay); if (s2 && s2 !== s && s2 < s && !(mAt(x + ax, y + ay) || {}).glow) { e = true; break; } }
+          for (let q = 0; q < 4; q++) {
+            const X = x + (q === 2 ? 1 : q === 3 ? -1 : 0), Y = y + (q === 0 ? 1 : q === 1 ? -1 : 0);
+            const s2 = sidAt(X, Y);
+            if (s2 && s2 !== s && s2 < s && !glowAt(X, Y)) { e = true; break; }
+          }
           if (e) { T[i] = inf.edge === true ? 0 : Math.min(T[i], inf.edge); continue; }
         }
-        if (!fx[i]) {
-          const up = at(x, y - 1);
-          if (up && up > s && info[up] && info[up].cast && !(mAt(x, y - 1) || {}).glow && !m.nocast) T[i] = Math.max(0, T[i] - 1);
+        if (!fx[i] && !m.nocast) {
+          const up = sidAt(x, y - 1);
+          if (up && up > s && info[up] && info[up].cast && !glowAt(x, y - 1)) T[i] = Math.max(0, T[i] - 1);
         }
       }
       const c = makeCanvas(w, h), cx = c.getContext('2d'), id = cx.createImageData(w, h), D = id.data;
-      const put = (i, hex) => { const [r, g, b] = HEX(hex); D[i * 4] = r; D[i * 4 + 1] = g; D[i * 4 + 2] = b; D[i * 4 + 3] = 255; };
+      const put = (i, hex) => { const v = rgbOf(hex); D[i * 4] = v[0]; D[i * 4 + 1] = v[1]; D[i * 4 + 2] = v[2]; D[i * 4 + 3] = 255; };
       for (let i = 0; i < N; i++) if (sid[i] && mt[i]) put(i, mt[i].r[clamp(T[i], 0, mt[i].r.length - 1)]);
       if (o.outline !== false) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const i = y * w + x;
         if (sid[i]) continue;
         let ink = null, soft = null;
-        for (const [ax, ay] of N4) {
-          const mm = mAt(x + ax, y + ay);
-          if (!mm || !at(x + ax, y + ay) || mm.noOl) continue;
+        for (let q = 0; q < 4; q++) {
+          const X = x + (q === 2 ? 1 : q === 3 ? -1 : 0), Y = y + (q === 0 ? 1 : q === 1 ? -1 : 0);
+          if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const j = Y * w + X, mm = mt[j];
+          if (!mm || !sid[j] || mm.noOl) continue;
           if (mm.glow || mm.soft) soft = mm; else ink = mm.ink || INK;
         }
         if (ink) put(i, ink); else if (soft) put(i, soft.ol || soft.r[0]);
@@ -310,10 +331,10 @@
       P.poly([[CX - 14, 33], [CX - 7, 23], [CX + 7, 23], [CX + 14, 33]], SK, { fl: 0.5 });
       // ---- testa a cupola
       P.egg(CX, 15.5, 14, 14.5, 12.5, 0.45, SK, { fl: 0.95 });
-      // cervello esposto: lobi più chiari e solchi
-      P.egg(CX, 9, 12, 8, 3, 0.05, SK, { keep: true, bias: 0.1, clip: (x, y) => y < 11 });
-      for (const pts of [[[CX, 1.5], [CX, 4], [CX - 1, 7], [CX, 10]], [[CX - 4, 2.5], [CX - 5, 4.5], [CX - 4, 6.5], [CX - 6, 9]], [[CX + 4, 2.5], [CX + 5, 4.5], [CX + 4, 6.5], [CX + 6, 9]], [[CX - 9, 4], [CX - 9, 6], [CX - 11, 8]], [[CX + 9, 4], [CX + 9, 6], [CX + 11, 8]]]) P.path(pts, SK, 1, { keep: true });
-      P.path([[CX - 13, 11], [CX - 9, 10.5], [CX - 4, 11], [CX, 10.5], [CX + 4, 11], [CX + 9, 10.5], [CX + 13, 11]], SKD, 1, { keep: true });
+      // cervello esposto: lobi gonfi separati da solchi scuri
+      const BR = MAT(['#2a2a44', '#4c5670', '#78908e', '#a2bab0', '#c8dcd0', '#e8f2e6']);
+      for (const [x, y, rx, ry] of [[-9.5, 6.5, 3.6, 3.4], [9.5, 6.5, 3.6, 3.4], [-5, 3, 4.2, 2.8], [5, 3, 4.2, 2.8], [-5.5, 8, 3.8, 2.8], [5.5, 8, 3.8, 2.8], [-1.6, 5.5, 2.6, 4.2], [1.6, 5.5, 2.6, 4.2]]) P.ell(CX + x, y, rx, ry, BR, { edge: 1, clip: (xx, yy) => yy < 11 && P.get(xx, yy) });
+      P.path([[CX, 1.5], [CX, 10]], BR, 0, { keep: true });
       // arcata sopraccigliare + occhio frontale
       P.path([[CX - 8, 13], [CX - 4, 11.6], [CX + 4, 11.6], [CX + 8, 13]], SKD, 2, { keep: true });
       eye(P, CX, 16.5, 5.2, 3.8, p2 ? 1 : (k ? 0.75 : 1), p2, 0);
@@ -323,7 +344,8 @@
       for (const s of [-1, 1]) P.path([[CX + s * 12, 19], [CX + s * 10, 24], [CX + s * 7, 25.5]], SK, 1, { keep: true });
       // bocca con denti
       P.ell(CX, 25.5, 6.5, 2.4, CAV, { keep: true, tone: 0 });
-      for (let i = -3; i <= 3; i++) { P.px(CX + i * 2, 24, BONE, 3, { keep: true }); P.px(CX + i * 2 + 1, 27, BONE, 2, { keep: true }); }
+      for (const x of [-5, -2, 2, 5]) { P.px(CX + x, 23.5, BONE, 3, { keep: true }); P.px(CX + x, 24.5, BONE, 2, { keep: true }); }
+      for (const x of [-4, 0, 4]) P.px(CX + x, 27, BONE, 2, { keep: true });
       // tentacoli della bocca (barba di Cthulhu) — corti, lasciano vedere il petto
       const tl = [8, 11, 13, 14, 13, 11, 8];
       for (let i = 0; i < 7; i++) {
@@ -424,7 +446,7 @@
       for (let i = 0; i < 7; i++) P.px(CX - 9 + i * 3, 33, trim, p2 ? 2 : 1, { keep: true });
       // ---- volto
       if (!p2) {
-        P.egg(CX, 24.5, 6.6, 6.5, 7, 0.34, MASK, { fl: 0.9, bias: 0.08 });
+        P.egg(CX, 24.5, 6.6, 6.5, 7, 0.34, MASK, { fl: 0.6, bias: 0.12 });
         // maschera serena di pietra: arcate, occhi chiusi, naso, bocca; lacrime di sangue
         P.line(CX - 5, 21.5, CX - 2, 21.5, MASK, 4, { keep: true }); P.line(CX + 2, 21.5, CX + 4, 21.5, MASK, 3, { keep: true });
         P.line(CX - 4, 23.5, CX - 2, 23.5, MASK, 0, { keep: true }); P.line(CX + 2, 23.5, CX + 4, 23.5, MASK, 0, { keep: true });
@@ -443,8 +465,9 @@
         P.px(CX - 1, 27, BONE, 2, { keep: true }); P.px(CX + 1, 27, BONE, 2, { keep: true });
         P.line(CX - 5, 26, CX - 5, 29, FLESH, 1, { keep: true }); P.line(CX + 5, 26, CX + 5, 29, FLESH, 1, { keep: true });
         // la maschera spaccata in due che si apre ai lati
-        P.poly([[CX - 9.5, 18.5], [CX - 6, 18.5], [CX - 6.5, 25], [CX - 5.5, 31], [CX - 9, 30]], MASK, { fl: 0.6 });
-        P.poly([[CX + 6, 18.5], [CX + 9.5, 18.5], [CX + 9, 30], [CX + 5.5, 31], [CX + 6.5, 25]], MASK, { fl: 0.6 });
+        P.poly([[CX - 8, 20], [CX - 5, 21.5], [CX - 6.5, 25.5], [CX - 9.5, 31.5], [CX - 11.5, 28]], MASK, { fl: 0.6, edge: 1 });
+        P.poly([[CX + 6, 17.5], [CX + 9.5, 16.5], [CX + 11, 21], [CX + 7.5, 23]], MASK, { fl: 0.6, edge: 1 });
+        P.line(CX - 7, 24, CX - 9, 26, DARK, 1, { keep: true }); P.px(CX - 7, 22, MASK, 4, { keep: true });
       }
       // ---- mitra altissima
       const mit = [[CX - 7.5, 19], [CX - 8.5, 13], [CX - 7.5, 8], [CX - 5, 4], [CX - 2, 1.5], [CX, 0.5], [CX + 2, 1.5], [CX + 5, 4], [CX + 7.5, 8], [CX + 8.5, 13], [CX + 7.5, 19]];
@@ -499,7 +522,7 @@
       P.poly([[17.5, 53], [24, 53], [27, 58], [31.5, 62], [26, 64.5], [20, 61], [17, 59]], skin, { fl: 0.6, bias: 0.05 });
       P.path([[22, 56], [25, 59.5], [28, 61.5]], skin, 3, { keep: true });
       // ---- décolleté rossa col tacco a spillo
-      P.poly([[13.5, 56.5], [19.5, 57], [21, 61], [26, 64], [31.5, 62.5], [36, 64.5], [39.5, 67.5], [39.5, 70.5], [31, 70.5], [26, 68.5], [21, 66], [17.5, 64.5], [13.5, 63.5], [12.5, 60]], SHOE, { fl: 0.55, bias: 0.06, cx: 23, cy: 62 });
+      P.poly([[13.5, 56.5], [19.5, 57], [21, 61], [26, 64], [31.5, 62.5], [36, 64.5], [39.5, 67.5], [39.5, 70.5], [31, 70.5], [26, 68.5], [21, 66], [17.5, 64.5], [13.5, 63.5], [12.5, 60]], SHOE, { v: (x, y) => 0.86 - (y - 57) * 0.045 - (x < 18 ? 0.08 : 0) + (x > 30 && y < 67 ? 0.06 : 0) });
       P.path([[19.5, 57.5], [21, 61], [26, 63.5], [31.5, 62]], SHOE, 4, { keep: true }); // bordo lucido dell'apertura
       P.path([[26, 68.5], [31, 70.5], [39, 70.5]], SHOE, 0, { keep: true });            // suola
       P.path([[33, 65], [36, 65.5], [37.5, 67]], SHOE, 4, { keep: true }); P.px(15, 58.5, SHOE, 4, { keep: true }); P.px(15, 59.5, SHOE, 4, { keep: true });
@@ -560,6 +583,355 @@
         P.line(Math.round((x0 + x1) / 2), 1, Math.round((x0 + x1) / 2), 22, WOOD, 1, { keep: true });
         P.px(x0 + 1.5, 4, WOOD, 4, { keep: true }); P.px(x0 + 1.5, 18, WOOD, 4, { keep: true });
       }
+    });
+  }
+
+  // =============================================================================
+  // MINI-BOSS (2 fotogrammi, rivolti a destra)
+  // =============================================================================
+
+  // ---- FALSO CAVALIERE (Hollow Knight): un verme nell'armatura grigia di Hegemol,
+  // elmo tondo da cui sbircia la faccina arancione del verme, mazza enorme
+  // (la "Macebug", con le zampette) alzata sopra la testa.
+  {
+    const ARM = MAT(['#16161f', '#2c2e3c', '#4a4e60', '#727890', '#a4aabb']);
+    const ARMD = MAT(['#0e0e16', '#1c1c28', '#2e3040', '#444858']);
+    const MAG = MAT(['#4a1e0c', '#9a4a1a', '#d8823a', '#f6b868', '#ffe0a8']);
+    const MACE = MAT(['#0e0c14', '#1e1a28', '#363044', '#56506a', '#827c96']);
+    const HAN = MAT(['#2a160e', '#4e2e1a', '#7a4a2a', '#a06a3c']);
+    reg2('falseknight', 42, 38, (P, k) => {
+      const mu = k ? 2 : 0;
+      // gambette tozze
+      P.cap(12, 30, 11 + (k ? 1 : -1), 35.5, 2.6, ARMD, { r2: 2.2 }); P.ell(10.5 + (k ? 1 : -1), 36, 3.4, 1.6, ARMD);
+      P.cap(22, 30, 23 + (k ? -1 : 1), 35.5, 2.6, ARMD, { r2: 2.2 }); P.ell(23.5 + (k ? -1 : 1), 36, 3.4, 1.6, ARMD);
+      // braccio posteriore
+      P.cap(7, 20, 4, 27, 2.6, ARMD, { r2: 2.2 }); P.ell(4, 28, 2.6, 2.2, ARMD);
+      // corpo-corazza tondo a piastre
+      P.ell(17, 22, 12.5, 10.5, ARM);
+      for (const [y, w] of [[17, 10], [22, 12], [27, 10]]) P.path([[17 - w, y + 1], [17 - w * 0.5, y - 0.5], [17 + w * 0.5, y - 0.5], [17 + w, y + 1]], ARM, 1, { keep: true });
+      for (const [x, y] of [[9, 16], [13, 15], [21, 15], [8, 21], [26, 21], [10, 26], [24, 26]]) P.px(x, y, ARM, 4, { keep: true });
+      P.ell(17, 31, 8, 2, ARMD, { keep: true, tone: 1 });
+      // spallaccio anteriore
+      P.ell(25, 15, 5.2, 4.2, ARM, { edge: 1 });
+      P.path([[21, 15], [25, 13], [29, 15]], ARM, 4, { keep: true });
+      // elmo tondo con cresta, apertura frontale con la faccina del verme
+      P.ell(19, 9, 7.6, 6.6, ARM, { edge: 1 });
+      P.poly([[16, 3.5], [19, -0.5], [21, 3]], ARM, { fl: 0.4 });
+      P.ell(22.5, 10, 4.2, 3.6, ARMD, { keep: true, tone: 0 });
+      P.ell(23, 10.5, 3, 2.6, MAG, { keep: true });
+      P.px(22, 10, DARK, 0, { keep: true }); P.px(24.5, 10, DARK, 0, { keep: true });
+      P.path([[13, 6], [16, 3.5], [20, 3]], ARM, 4, { keep: true });
+      P.path([[12.5, 12], [15, 14.5], [19, 15.5]], ARM, 1, { keep: true });
+      // braccio anteriore alzato che regge la mazza
+      P.cap(26, 16, 31, 9 - mu, 2.6, ARM, { r2: 2.3, edge: 1 });
+      // mazza: manico + testa chiodata enorme (la Macebug, con le zampette)
+      const mx = 34.5, my = 7 - mu;
+      P.cap(29.5, 15 - mu, mx - 2, my + 3, 1.3, HAN);
+      P.ell(30.5, 10.5 - mu, 2.8, 2.5, ARMD, { edge: 1 });
+      for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + 0.4; P.poly([[mx + Math.cos(a - 0.32) * 4.8, my + Math.sin(a - 0.32) * 4.8], [mx + Math.cos(a) * 7.4, my + Math.sin(a) * 7.4], [mx + Math.cos(a + 0.32) * 4.8, my + Math.sin(a + 0.32) * 4.8]], MACE, { fl: 0.3 }); }
+      P.ell(mx, my, 5.6, 5.4, MACE);
+      P.path([[mx - 3.5, my - 2], [mx - 1, my - 4], [mx + 2.5, my - 3.5]], MACE, 4, { keep: true });
+      P.path([[mx - 4.5, my + 2], [mx, my + 4], [mx + 4.5, my + 2]], MACE, 1, { keep: true });
+      P.path([[mx - 5, my], [mx + 5, my]], MACE, 2, { keep: true });
+      for (const [dx, d] of [[-3, -1], [0, 0], [3, 1]]) P.line(mx + dx, my + 5.5, mx + dx + d, my + 8 + (k ? 0 : 1), MACE, 1);
+    });
+  }
+
+  // ---- SWORDSMACHINE (ULTRAKILL): macchina allampanata gialla e nera, testa alta e
+  // rettangolare con gli occhi blu in cima (spaiati), armatura bruciacchiata,
+  // avambraccio-fucile a pompa e spada motorizzata che arroventa il filo.
+  {
+    const YEL = MAT(['#2e1e06', '#6e4c0e', '#b48a16', '#e8c228', '#fff27a']);
+    const BLK = MAT(['#09080d', '#15121b', '#241f2c', '#36303f']);
+    const STEEL = MAT(['#1e2028', '#3e4250', '#6a7080', '#9aa2b2', '#d0d6e2']);
+    const EYEB = MAT(['#0a2050', '#1a50b0', '#3a96ff', '#a0dcff', '#ffffff'], { glow: true, base: 2, ol: '#0a1640' });
+    const HOT = MAT(['#6a1a06', '#c84a0e', '#ff8a1e', '#ffd04a', '#fff6c8'], { glow: true, base: 1, ol: '#4a1206' });
+    reg2('swordsmachine', 32, 34, (P, k) => {
+      const st = k ? 1 : 0;
+      // gambe lunghe e nere con schinieri gialli
+      P.cap(12, 22, 10 + (k ? 1.5 : -1), 31, 1.6, BLK); P.rect(7.5 + (k ? 1.5 : -1), 31, 5, 2.4, BLK);
+      P.cap(18, 22, 20 + (k ? -1.5 : 1), 31, 1.6, BLK); P.rect(17.5 + (k ? -1.5 : 1), 31, 5, 2.4, BLK);
+      P.poly([[9.5 + (k ? 1 : -0.5), 25], [13.5 + (k ? 1 : -0.5), 25], [13 + (k ? 1.4 : -1), 30], [10 + (k ? 1.4 : -1), 30]], YEL, { fl: 0.5 });
+      P.poly([[17 + (k ? -1 : 0.5), 25], [21 + (k ? -1 : 0.5), 25], [21 + (k ? -1.4 : 1), 30], [18 + (k ? -1.4 : 1), 30]], YEL, { fl: 0.5 });
+      // bacino
+      P.rect(10, 19.5, 10, 3.5, BLK, { fl: 0.4 });
+      // braccio posteriore: avambraccio = fucile a pompa
+      P.cap(9, 12, 6, 18, 1.5, BLK);
+      P.rect(2, 17.5, 7, 3, STEEL, { fl: 0.4 }); P.rect(0.5, 18, 2, 2, BLK, { tone: 0 }); P.rect(5, 20.5, 2.5, 2, BLK);
+      P.line(2, 18, 7, 18, STEEL, 4, { keep: true });
+      // torso: corazza gialla a placche, giunture nere
+      P.poly([[8, 10], [22, 10], [21, 19.5], [9, 19.5]], YEL, { fl: 0.6 });
+      P.rect(13.5, 11, 3, 8.5, BLK, { fl: 0.3 });
+      P.line(8, 15, 13, 15, YEL, 1, { keep: true }); P.line(17, 15, 21.5, 15, YEL, 1, { keep: true });
+      for (const [x, y] of [[10, 12], [19, 17], [11, 18], [20, 12]]) P.px(x, y, YEL, 0, { keep: true }); // bruciature
+      P.ell(8.5, 11, 2.6, 2, YEL, { edge: 1 }); P.ell(21.5, 11, 2.6, 2, YEL, { edge: 1 });
+      // testa alta e rettangolare, occhi blu in cima e spaiati
+      P.rect(12, 0.5, 6.5, 9, YEL, { fl: 0.5 });
+      P.rect(12.5, 4.5, 5.5, 4, BLK, { tone: 1 });
+      P.line(13, 7, 17.5, 7, BLK, 3, { keep: true });
+      P.px(13, 1.5, EYEB, 3); P.px(14, 1.5, EYEB, 3, { same: true }); P.px(16.5, 2.5, EYEB, 3); P.px(17.5, 2.5, EYEB, 2, { same: true });
+      P.rect(14, 9, 2.5, 1.5, BLK);
+      // braccio anteriore + spada motorizzata (filo arroventato, denti della catena)
+      P.cap(22, 12, 24, 17.5 + st, 1.6, BLK);
+      const hx = 24.5, hy = 18.5 + st, tx = 30.5, ty = 0.5 + st;
+      P.cap(hx - 1, hy + 1, hx + 0.5, hy - 2, 1.4, BLK);
+      P.poly([[hx - 1, hy - 2], [hx + 3, hy - 1], [tx + 1, ty + 2], [tx - 0.5, ty - 0.5], [tx - 2.5, ty + 0.5]], STEEL, { fl: 0.5 });
+      P.line(hx, hy - 3, tx - 2, ty + 1, STEEL, 4, { keep: true });
+      P.line(hx + 2.5, hy - 1.5, tx + 0.5, ty + 2, HOT, 2, { keep: true });
+      for (let i = 0; i < 6; i++) { const t = 0.12 + i * 0.15, x = hx + 3 + (tx + 1 - hx - 3) * t, y = hy - 1 + (ty + 2 - hy + 1) * t; P.px(x + 1, y + ((i + k) % 2) * 0.6, HOT, 3); }
+      P.rect(hx - 2.5, hy - 3, 5, 2, YEL, { fl: 0.4 }); // guardia / motore
+      P.px(hx - 2, hy - 2.5, BLK, 1, { keep: true });
+      P.ell(hx, hy, 1.8, 1.6, BLK);
+    });
+  }
+
+  // ---- MEGERA (Hades): pelle azzurro pallido, capelli blu scuro in coda alta, occhi
+  // gialli, labbra rosa, una sola grande ala da pipistrello (dentro nero-blu, fuori
+  // rosa-rossa), abiti grigio scuro e blu con placche d'oro, frusta rosa.
+  {
+    const SKN = MAT(['#26304e', '#46587e', '#7690b4', '#a6bed8', '#d4e4f0']);
+    const HAIR = MAT(['#0a0c22', '#161c44', '#24306c', '#36488e']);
+    const CLO = MAT(['#0c0c16', '#1a1a2a', '#2a2c44', '#3c4060', '#565a7e']);
+    const WIN = MAT(['#07070d', '#101224', '#1a2038', '#283050']);
+    const WRED = MAT(['#2e0814', '#6a1228', '#a82640', '#d8505e', '#f08a88']);
+    const WHIP = MAT(['#3e0822', '#8e164c', '#d8327a', '#ff7ab4', '#ffc4de']);
+    const YEYE = MAT(['#6a4a06', '#c89a10', '#ffe040', '#fff8b0'], { glow: true, base: 2 });
+    reg2('megaera', 36, 34, (P, k) => {
+      const f = k ? 4 : 0; // battito d'ala
+      // ---- l'unica grande ala da pipistrello, dal dorso verso sinistra
+      const sh = [15, 12];
+      const tips = [[1, 1 + f * 0.6], [0.5, 10 + f * 0.4], [3, 18 + f * 0.1], [8, 22 - f * 0.2]];
+      const knuckle = [6, 3 + f * 0.5];
+      P.poly([sh, knuckle, ...tips.slice(0, 1), [2.5, 6 + f * 0.5], tips[1], [4.5, 15 + f * 0.25], tips[2], [6.5, 19.5], tips[3], [12, 20]], WIN, { fl: 0.3 });
+      P.cap(sh[0], sh[1], knuckle[0], knuckle[1], 1.3, WRED, { r2: 1 });
+      for (const t of tips) P.cap(knuckle[0], knuckle[1], t[0], t[1], 0.6, WRED, { tone: 2 });
+      P.path([knuckle, tips[0]], WRED, 3, { keep: true });
+      P.poly([[knuckle[0] - 1, knuckle[1] - 2], [knuckle[0] - 2.5, knuckle[1] - 4.5], [knuckle[0] + 0.5, knuckle[1] - 1]], WRED, { fl: 0.3 }); // artiglio
+      // ---- gambe: stivali scuri con schinieri d'oro
+      P.cap(18, 24, 17 + (k ? 0.5 : -0.5), 32, 1.6, CLO); P.cap(23, 24, 24 + (k ? -0.5 : 0.5), 32, 1.6, CLO);
+      P.rect(15.5 + (k ? 0.5 : -0.5), 31.5, 4, 2, CLO); P.rect(22.5 + (k ? -0.5 : 0.5), 31.5, 4, 2, CLO);
+      P.rect(16.5, 26.5, 3, 3, GOLD, { fl: 0.5 }); P.rect(22.5, 26.5, 3, 3, GOLD, { fl: 0.5 });
+      // ---- veste: gonna a pannelli grigio-blu con spacchi
+      P.poly([[15, 16], [26, 16], [28, 25], [24, 23.5], [21, 26], [18, 23.5], [14, 25]], CLO, { fl: 0.6 });
+      P.line(21, 18, 21, 25, CLO, 1, { keep: true });
+      P.rect(15.5, 16, 10, 1.6, GOLD, { fl: 0.3 }); // cintura
+      // braccio posteriore
+      P.cap(16, 11, 13.5, 17, 1.3, SKN);
+      // ---- busto
+      P.poly([[16, 9.5], [25, 9.5], [24.5, 16.5], [16.5, 16.5]], CLO, { fl: 0.6 });
+      P.poly([[18.5, 9.5], [22.5, 9.5], [20.5, 13]], SKN, { fl: 0.4 }); // scollo
+      P.ell(16.5, 10.5, 2.4, 1.8, GOLD, { edge: 1 }); P.ell(24.8, 10.5, 2.4, 1.8, GOLD, { edge: 1 }); // spalline d'oro
+      // ---- testa: coda alta che ricade dietro, occhi gialli, labbra rosa
+      P.cap(17.5, 2.5, 12.5, 5 + (k ? 1 : 0), 1.6, HAIR, { r2: 1.2 }); P.cap(12.5, 5 + (k ? 1 : 0), 10, 11 + (k ? 1 : 0), 1.2, HAIR, { r2: 0.6, same: true });
+      P.ell(21.5, 6, 4, 4.3, SKN);
+      P.poly([[17, 6.5], [17.2, 3], [19.5, 1], [23, 1], [25.5, 3], [25.5, 4.5], [23, 3.2], [20.5, 3.6], [19, 5], [19, 8.5]], HAIR, { fl: 0.5 });
+      P.ell(17.6, 2.6, 2, 1.7, HAIR); P.px(16.5, 4, GOLD, 4); // chignon + fermaglio
+      P.line(22, 5.5, 23, 5.5, YEYE, 3); P.px(25, 5.5, YEYE, 3);
+      P.line(21.5, 4.5, 23, 4.2, HAIR, 1, { keep: true });
+      P.px(24, 8.5, WHIP, 3, { keep: true });
+      P.px(19.5, 7.5, GOLD, 4, { keep: true }); // orecchino
+      // ---- braccio anteriore con bracciale d'oro + frusta rosa
+      P.cap(25, 11, 27.5, 16.5, 1.3, SKN);
+      P.rect(26, 14.5, 2.5, 1.5, GOLD, { tone: 3 });
+      P.ell(28, 17.5, 1.4, 1.3, SKN);
+      P.cap(28, 17, 29.5, 19.5, 0.9, WHIP, { tone: 1 }); // impugnatura
+      const wp = k ? [[29.5, 19.5], [32, 17], [34.5, 18.5], [34, 22.5], [30.5, 24], [29, 27.5], [31.5, 30.5], [34.5, 31]]
+                   : [[29.5, 19.5], [31, 23], [34.5, 23.5], [35, 19.5], [33, 16.5], [30.5, 13.5], [32, 10], [34.5, 9]];
+      P.path(wp, WHIP, 2);
+      P.path(wp.slice(0, 4), WHIP, 3, { keep: true });
+    });
+  }
+
+  // ---- MR. OSHIRO (Celeste): il fantasma del portiere del Celestial Resort; pelle
+  // azzurro-lavanda, grosso naso, ciuffi bianchi ai lati della testa calva,
+  // completo blu notte con camicia bianca e papillon rosso, coda di fantasma.
+  {
+    const GH = MAT(['#262a4a', '#4a5488', '#7686bc', '#a0b2dc', '#cad8f0']);
+    const SUIT = MAT(['#0c1026', '#1a2046', '#2a3670', '#3e5096', '#5a70b4']);
+    const WHITE = MAT(['#5a6078', '#a4aac0', '#dfe2ee', '#ffffff']);
+    const BOW = MAT(['#3a0a14', '#8a1a2a', '#d0303e', '#ff7070']);
+    reg2('oshiro', 26, 30, (P, k) => {
+      // coda di fantasma che ondeggia
+      const tw = k ? 1 : -1;
+      P.poly([[7.5, 19], [17.5, 19], [16.5, 23], [13 + tw, 26], [9 + tw * 2, 28.5], [6.5 + tw * 2, 28.5], [8.5 + tw, 25.5], [8, 22]], GH, { fl: 0.6 });
+      P.path([[10, 21], [11 + tw, 24.5], [9 + tw * 2, 27]], GH, 4, { keep: true });
+      // giacca blu notte
+      P.poly([[7, 12], [18, 12], [18.5, 21], [12.5, 22.5], [6.5, 21]], SUIT, { fl: 0.6 });
+      P.poly([[11.5, 12], [16.5, 12], [14, 19]], WHITE, { fl: 0.3 });
+      P.line(14, 16, 14, 21, SUIT, 1, { keep: true });
+      P.px(13, 18, GOLD, 4, { keep: true }); P.px(13, 20.5, GOLD, 3, { keep: true });
+      // papillon rosso
+      P.poly([[11.5, 12], [14, 13.2], [16.5, 12], [16.5, 14.8], [14, 13.6], [11.5, 14.8]], BOW, { fl: 0.4 });
+      P.px(14, 13, BOW, 3);
+      // braccia con guanti bianchi (gesticola)
+      P.cap(8, 13.5, 5, 18 - k, 1.4, SUIT); P.ell(4.5, 18.5 - k, 1.6, 1.5, WHITE);
+      P.cap(18, 13.5, 21, 16 + k * 2, 1.4, SUIT); P.ell(21.5, 16.5 + k * 2, 1.6, 1.5, WHITE);
+      // testa: calva, ciuffi bianchi, orecchio, occhietti, sopracciglio folto, naso grosso
+      P.ell(12.5, 7, 6.2, 6, GH);
+      P.ell(7, 8.5, 1.6, 2.4, WHITE, { fl: 0.5 }); P.px(8, 5.5, WHITE, 2); P.px(9, 5, WHITE, 3, { same: true });
+      P.ell(9.5, 8, 1.4, 1.8, GH, { edge: 1 });
+      P.line(14, 4.5, 16.5, 5, WHITE, 2, { keep: true });
+      P.px(15.5, 6.5, DARK, 0, { keep: true }); P.px(15.5, 7.5, DARK, 1, { keep: true });
+      P.ell(19.5, 8.5, 3.2, 2.7, GH, { bias: 0.04 }); P.px(19, 7.5, GH, 4, { keep: true });
+      P.line(15, 11, 17.5, 11, GH, 1, { keep: true });
+      P.px(13, 10.5, GH, 1, { keep: true });
+    });
+  }
+
+  // ---- TEN PIEDAD (Blasphemous): gigante simile a un albero, arti allungati, teschio
+  // di capra con corna ricurve, mani e piedi fatti di radici, rovi che lo avvolgono.
+  {
+    const BARK = MAT(['#18120e', '#33281e', '#544430', '#7a6848', '#a2906a']);
+    const VINE = MAT(['#0e160e', '#1e2e18', '#334a24', '#4e6a32']);
+    const EMB = MAT(['#5a1004', '#b0300a', '#ff7a1e', '#ffd070'], { glow: true, base: 2, ol: '#3a0a04' });
+    reg2('tenpiedad', 42, 40, (P, k) => {
+      const sw = k ? 1 : 0;
+      // gambe-radice
+      for (const [x0, x1, d] of [[14, 11, -1], [24, 27, 1]]) {
+        P.cap(x0, 28, x1 + (k ? -d * 0.5 : d * 0.5), 36, 3, BARK, { r2: 2.4 });
+        const fx = x1 + (k ? -d * 0.5 : d * 0.5);
+        for (const [dx, dy] of [[-4, 1.5], [-1.5, 2.5], [2, 2.2], [4.5, 1]]) P.cap(fx, 36, fx + dx, 37.5 + dy * 0.5, 1, BARK, { r2: 0.5 });
+      }
+      // braccio posteriore lunghissimo, mano-radice a terra
+      P.cap(11, 15, 6, 26, 2.8, BARK, { r2: 2.2 }); P.cap(6, 26, 4 - sw, 34, 2.2, BARK, { r2: 1.8, same: true });
+      for (const [dx, dy] of [[-3.5, 3], [-1, 4], [2, 3.5]]) P.cap(4 - sw, 34, 4 - sw + dx, 34 + dy, 0.9, BARK, { r2: 0.5 });
+      // tronco/busto curvo (gobba in alto a sinistra)
+      P.egg(19, 20, 12.5, 11, 9, 0.3, BARK);
+      P.ell(13, 13.5, 7, 5.5, BARK, { bias: 0.05 }); // gobba
+      // venature/costole della corteccia
+      for (const pts of [[[10, 16], [13, 22], [12, 28]], [[17, 12], [18, 19], [16, 26]], [[24, 14], [25, 21], [27, 26]], [[20, 22], [22, 27]]]) P.path(pts, BARK, 1, { keep: true });
+      for (const pts of [[[9, 12], [12, 10]], [[15, 10], [19, 9]]]) P.path(pts, BARK, 4, { keep: true });
+      // rovi che lo avvolgono
+      P.path([[7, 21], [12, 23], [18, 22], [24, 24], [30, 22]], VINE, 2);
+      P.path([[9, 15], [14, 17.5], [20, 16], [26, 18]], VINE, 2);
+      for (const [x, y] of [[10, 22], [15, 23], [21, 23], [27, 23], [12, 16], [18, 16], [23, 17]]) P.px(x, y - 1, VINE, 3);
+      // collo e testa: teschio di capra proteso in avanti
+      P.cap(24, 13, 29, 11, 3, BARK, { r2: 2.6 });
+      P.poly([[27, 6], [33, 6.5], [36.5, 11], [38, 16], [36.5, 18.5], [34, 18], [31, 13.5], [27, 12]], BONE, { fl: 0.6, edge: 1 });
+      P.ell(29.5, 8.5, 3.6, 3.2, BONE, { edge: 1 });
+      P.ell(31, 9.5, 1.5, 1.3, DARK, { keep: true, tone: 0 }); P.px(31, 9.5, EMB, 3, { keep: true });
+      P.path([[34.5, 13.5], [36, 16], [35.5, 17.5]], DARK, 2, { keep: true }); // narice/muso
+      for (const x of [33, 35]) P.px(x, 17, BONE, 1, { keep: true });
+      P.path([[28, 7], [31, 6.2], [33, 7]], BONE, 4, { keep: true });
+      // corna ricurve all'indietro
+      P.cap(28, 6, 24, 2, 1.6, BONE, { r2: 1.3 }); P.cap(24, 2, 20, 3.5, 1.3, BONE, { r2: 0.9, same: true }); P.cap(20, 3.5, 19, 6.5, 0.9, BONE, { r2: 0.5, same: true });
+      P.cap(30, 5.5, 31, 1.5, 1.3, BONE, { r2: 1 }); P.cap(31, 1.5, 34, 0.5, 1, BONE, { r2: 0.5, same: true });
+      for (const [x, y] of [[26, 3], [23, 2], [21, 3]]) P.px(x, y, BONE, 1, { keep: true });
+      // braccio anteriore lunghissimo che arriva a terra, dita-radice
+      P.cap(27, 15, 32, 25, 2.9, BARK, { r2: 2.3, edge: 1 }); P.cap(32, 25, 34 + sw, 33, 2.3, BARK, { r2: 1.9, same: true });
+      for (const [dx, dy] of [[-2.5, 4], [0.5, 4.5], [3, 3.5], [5, 1.5]]) P.cap(34 + sw, 33, 34 + sw + dx, 33 + dy, 0.9, BARK, { r2: 0.5 });
+      P.path([[30, 18], [32, 23]], BARK, 4, { keep: true });
+    });
+  }
+
+  // ---- OCCHIO DI CTHULHU (Terraria): enorme bulbo con vene rosse, iride blu con
+  // eterocromia centrale, tentacoli-nervi che penzolano dietro.
+  {
+    const SCL = MAT(['#4e3c46', '#9c8690', '#d8c8c6', '#f4ece6', '#ffffff']);
+    const VEINR = MAT(['#3e0610', '#7e0e1e', '#c42030', '#ff5a5a']);
+    const TENR = MAT(['#2a0610', '#5e1020', '#9a2032', '#cc4450', '#ec7a7a']);
+    const IRB = MAT(['#0a1840', '#163a86', '#2a64c8', '#5a94ec', '#9ac4ff']);
+    const IRC = MAT(['#3a2408', '#7a5214', '#b88a2a', '#e8c25a']);
+    reg2('eoc', 42, 32, (P, k) => {
+      // tentacoli-nervi dietro (a sinistra)
+      for (let i = 0; i < 5; i++) {
+        const y0 = 9 + i * 3.5, ph = (i + k) % 2 ? 1.5 : -1.5;
+        const pts = [[13, y0], [8, y0 + ph * 0.7], [4, y0 - ph * 0.5 + (i - 2) * 0.8], [1.5, y0 + ph + (i - 2) * 1.4]];
+        P.cap(pts[0][0], pts[0][1], pts[1][0], pts[1][1], 1.5, TENR, { r2: 1.2 });
+        P.cap(pts[1][0], pts[1][1], pts[2][0], pts[2][1], 1.2, TENR, { r2: 0.9, same: true });
+        P.cap(pts[2][0], pts[2][1], pts[3][0], pts[3][1], 0.9, TENR, { r2: 0.5, same: true });
+      }
+      // bulbo
+      P.ell(25, 16, 14, 13.5, SCL);
+      // vene ramificate che partono da dietro
+      for (const pts of [[[12, 9], [16, 9.5], [19, 7], [22, 6.5]], [[16, 9.5], [18, 12]], [[11.5, 16], [16, 15.5], [19, 17.5]], [[16, 15.5], [18, 13.5]], [[12, 22], [16, 22], [19, 25], [22, 26]], [[16, 22], [19, 20.5]], [[14, 5], [18, 3.5], [21, 3]], [[14, 27], [18, 28.5]]]) P.path(pts, VEINR, 2, { keep: true, only: SCL });
+      P.ell(13, 16, 2.2, 6, SCL, { keep: true, only: SCL, tone: 1 });
+      // iride blu + anello interno ambrato (eterocromia) + pupilla
+      P.ell(31.5, 16, 7, 7.4, IRB, { fl: 0.6, edge: 1 });
+      P.ell(32.5, 16, 4.2, 4.4, IRC, { keep: true, fl: 0.5 });
+      P.ell(33, 16, 2.6, 2.8, DARK, { keep: true, tone: 0 });
+      P.px(29, 12, SCL, 4, { keep: true }); P.px(30, 12, SCL, 4, { keep: true }); P.px(29, 13, SCL, 4, { keep: true });
+      P.path([[26, 10], [27.5, 8.8], [29.5, 8.5]], IRB, 4, { keep: true });
+    });
+  }
+
+  // ---- MONSTRO (The Binding of Isaac): grosso blob rosa a bitorzoli con macchie,
+  // occhietti, boccone con labbra carnose e denti (ne manca uno: il Dente di Monstro).
+  {
+    const PINK = MAT(['#3a1222', '#782c42', '#b45268', '#e08694', '#f6bcbe']);
+    const LIP = MAT(['#2e0812', '#62142a', '#9a2840', '#c84a5e', '#e47a84']);
+    const MOUTH = MAT(['#120408', '#2a0810', '#46101c', '#641a28']);
+    const TOOTH = MAT(['#6a5a50', '#b8aa98', '#ece2cc', '#ffffff']);
+    reg2('monstro', 46, 38, (P, k) => {
+      const sq = k ? 1 : 0, cy = 21 + sq, ry = 15 - sq, rx = 21 + sq * 0.6;
+      P.egg(23, cy, rx, ry, ry - 1.5, 0.05, PINK, { fl: 0.95 });
+      // bitorzoli sul profilo superiore
+      for (const [x, y, r] of [[12, 10 + sq, 3.4], [21, 7 + sq, 3.6], [31, 7.5 + sq, 3.4]]) P.ell(x, y, r, r * 0.75, PINK);
+      P.ell(23, cy - 4, rx - 3, ry - 6, PINK, { fl: 0.7 });
+      // macchie e pustole
+      for (const [x, y, r] of [[8, 22, 1.6], [12, 14, 1.1], [38, 24, 1.8], [33, 13, 1.2], [40, 17, 1], [6, 27, 1.2], [36, 30, 1.2], [19, 10, 1]]) { P.ell(x, y + sq, r, r * 0.8, PINK, { keep: true, tone: 1 }); P.px(x - 0.5, y - 0.5 + sq, PINK, 3, { keep: true }); }
+      // occhietti
+      for (const x of [17, 31]) { P.ell(x, 15 + sq, 2.6, 2.4, DARK, { keep: true, tone: 0 }); P.px(x - 1, 14 + sq, TOOTH, 2, { keep: true }); }
+      P.path([[13.5, 11.5 + sq], [16, 12 + sq], [19.5, 11 + sq]], PINK, 1, { keep: true });
+      P.path([[28.5, 11 + sq], [32, 12 + sq], [34.5, 11.5 + sq]], PINK, 1, { keep: true });
+      // boccone con labbra carnose
+      const my = 25 + sq, mh = k ? 3.6 : 4.6;
+      P.ell(24, my, 13, mh + 2.6, LIP, { fl: 0.8 });
+      P.ell(24, my, 11, mh, MOUTH, { keep: true });
+      P.path([[13, my - 3], [18, my - 5.5], [24, my - 6], [30, my - 5.5], [35, my - 3]], LIP, 4, { keep: true });
+      // denti in alto (uno mancante) e in basso
+      for (let i = 0; i < 8; i++) { if (i === 5) continue; const x = 15.5 + i * 2.3; P.rect(x, my - mh + 0.2, 1.6, 2, TOOTH, { keep: true, tone: (xx, yy) => yy < my - mh + 1.5 ? 3 : 2 }); }
+      for (let i = 0; i < 6; i++) { const x = 17 + i * 2.4; P.rect(x, my + mh - 1.8, 1.6, 1.6, TOOTH, { keep: true, tone: 2 }); }
+      P.ell(24, my + 1.2, 4, 1.2, LIP, { keep: true, only: MOUTH, tone: 2 }); // lingua
+    });
+  }
+
+  // ---- IL PORTINAIO (Dead Cells): bruto enorme dalle spalle tonde, testolina chiusa
+  // in un elmo di ferro con la fessura rovente, cinghie di cuoio sul petto, ceppi ai
+  // polsi con catene spezzate, pugni enormi.
+  {
+    const MUS = MAT(['#2a1220', '#562a3c', '#8a4e5e', '#b67a84', '#dca8a8']);
+    const IRON = MAT(['#121219', '#272a36', '#464b5c', '#717888', '#a2a8b6']);
+    const TROU = MAT(['#100e18', '#1e1a2c', '#302a44', '#463e5e']);
+    const LEATH = MAT(['#1e0e08', '#3e2012', '#64361e', '#8a522e', '#ae7444']);
+    const VIS = MAT(['#5a0a06', '#b01a0a', '#ff4a2a', '#ffa07a', '#fff0d0'], { glow: true, base: 2, ol: '#2a0604' });
+    reg2('concierge', 42, 40, (P, k) => {
+      const sw = k ? 1 : -1;
+      // gambe corte e massicce
+      P.cap(15, 30, 14 - sw, 36, 3.6, TROU, { r2: 3.2 }); P.ell(13.5 - sw, 37.5, 4.4, 2, IRON);
+      P.cap(26, 30, 27 + sw, 36, 3.6, TROU, { r2: 3.2 }); P.ell(27.5 + sw, 37.5, 4.4, 2, IRON);
+      // braccio posteriore + pugno + ceppo
+      P.cap(9, 14, 5, 25, 4, MUS, { r2: 3.4 });
+      P.ell(4.5, 28 + (k ? 1 : 0), 4.2, 3.8, MUS, { edge: 1 });
+      P.rect(1.5, 23 + (k ? 1 : 0), 6, 2.6, IRON, { fl: 0.4 });
+      // busto a botte, ventre più chiaro
+      P.egg(20, 21, 14.5, 11, 10, 0.18, MUS);
+      P.ell(21, 25, 9, 6.5, MUS, { keep: true, bias: 0.06 });
+      P.path([[14, 18], [20, 20], [27, 18]], MUS, 1, { keep: true }); // pettorali
+      P.line(20.5, 22, 20.5, 29, MUS, 1, { keep: true });
+      // pantaloni / cintura
+      P.poly([[9, 28], [32, 28], [31, 32], [10, 32]], TROU, { fl: 0.4 });
+      P.rect(9, 27.5, 23, 2, LEATH, { fl: 0.3 }); P.rect(18.5, 27.3, 4, 2.4, IRON, { tone: 3 });
+      // cinghie incrociate con anello di ferro
+      P.path([[9, 13], [14, 17], [20, 21], [26, 24], [31, 27]], LEATH, 2);
+      P.path([[31, 13], [26, 17], [20, 21], [14, 24], [9, 27]], LEATH, 2);
+      P.path([[9, 14], [14, 18], [20, 22], [26, 25], [31, 28]], LEATH, 1, { keep: true, only: MUS });
+      P.ell(20, 21, 1.8, 1.8, IRON); P.px(20, 21, IRON, 0, { keep: true });
+      // spalle enormi
+      P.ell(9, 13, 6, 5, MUS, { edge: 2 }); P.ell(31, 13, 6.4, 5.2, MUS, { edge: 2 });
+      // testolina nell'elmo di ferro con fessura rovente
+      P.ell(21, 8.5, 5.2, 5.4, IRON);
+      P.rect(16, 7.4, 10.5, 2, VIS);
+      P.line(18, 4.5, 24, 4.5, IRON, 4, { keep: true });
+      for (const x of [17.5, 24.5]) P.px(x, 11.5, IRON, 4, { keep: true });
+      P.rect(16.5, 11, 9, 2.2, IRON, { fl: 0.3 }); // gorgiera
+      // braccio anteriore + pugno + ceppo con catena spezzata
+      P.cap(32, 14, 35, 24, 4.2, MUS, { r2: 3.6, edge: 2 });
+      P.ell(36, 28 - (k ? 1 : 0), 4.6, 4.2, MUS, { edge: 1 });
+      P.path([[33, 26.5 - (k ? 1 : 0)], [35, 25.5 - (k ? 1 : 0)], [38, 26 - (k ? 1 : 0)]], MUS, 1, { keep: true }); // nocche
+      P.rect(32, 22.5 - (k ? 1 : 0), 7, 2.8, IRON, { fl: 0.4 });
+      for (let i = 0; i < 3; i++) P.ell(39.5 + (i % 2) * 0.5, 26 + i * 2.6 - (k ? 1 : 0) + (k ? i * 0.3 : 0), 1.1, 1.4, IRON);
+      for (let i = 0; i < 2; i++) P.ell(2 - (i % 2) * 0.5, 27 + i * 2.6 + (k ? 1 : 0), 1.1, 1.4, IRON);
     });
   }
 })();
