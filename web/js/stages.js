@@ -358,7 +358,7 @@ const STAGES = {
     table(t) { return t < 60 ? [['moth', 7], ['doll', 3]] : t < 150 ? [['moth', 4], ['doll', 4], ['pin', 2]] : [['moth', 3], ['doll', 4], ['pin', 3]]; },
     init() { G.lanes = [-240, -80, 80, 240]; G.shuttle = null; G.shuttleT = 14; G.holes = []; G.holeT = 16; },
     clampPos(x, y) { return [x, clamp(y, -320, 320)]; },
-    spawnPos(a) { const p = G.p; let x = p.x + Math.cos(a) * 380, y = p.y + Math.sin(a) * 260; y = clamp(y, -315, 315); if (G.arena) { const [nx, ny] = norm(x - G.arena.x, y - G.arena.y); x = G.arena.x + nx * (G.arena.r - 10); y = G.arena.y + ny * (G.arena.r - 10); } return [x, y]; },
+    spawnPos(a) { const p = G.center || G.p; let x = p.x + Math.cos(a) * 380, y = p.y + Math.sin(a) * 260; y = clamp(y, -315, 315); if (G.arena) { const [nx, ny] = norm(x - G.arena.x, y - G.arena.y); x = G.arena.x + nx * (G.arena.r - 10); y = G.arena.y + ny * (G.arena.r - 10); } return [x, y]; },
     constrainPlayer(p) { p.y = clamp(p.y, -322, 322); arenaClamp(p, true); },
     constrainEnemy(e) { e.y = clamp(e.y, -326, 326); },
     update(dt) {
@@ -378,7 +378,8 @@ const STAGES = {
         else {
           s.x += s.dir * 1100 * dt;
           GRID.query(s.x, s.y, 40, e => { if (Math.abs(e.y - s.y) < 22 && !e.anchored) hurtEnemy(e, e.boss ? 200 : 999, { silent: true }); });
-          if (!s.hitP && Math.abs(p.y - s.y) < 22 && Math.abs(p.x - s.x) < 44 && !(p.flyT > 0)) { s.hitP = true; hurtPlayer(26, null); }
+          s.hitSet = s.hitSet || new Set();
+          forPls(pl => { s.hitSet.add(pl); hurtPlayer(26, null); }, q => !s.hitSet.has(q.pl) && Math.abs(q.y - s.y) < 22 && Math.abs(q.x - s.x) < 44 && !(q.flyT > 0));
           if ((s.dir > 0 && s.x > camX + W + 160) || (s.dir < 0 && s.x < camX - 160)) G.shuttle = null;
         }
       }
@@ -391,11 +392,11 @@ const STAGES = {
       for (const h of G.holes) {
         h.life -= dt; h.r = Math.min(20, h.r + dt * 40); if (h.life < 1) h.r = 20 * h.life;
         GRID.query(h.x, h.y, h.r - 3, e => { if (!e.elite && !e.boss && !e.anchored) { e.noXp = true; killEnemy(e); fxParticles(h.x, h.y, '#2a1838', 3, 20, 0.3); } });
-        if (h.r > 8 && d2(p.x, p.y, h.x, h.y) < (h.r - 3) ** 2 && !(p.flyT > 0)) {
-          const a = rnd(TAU); p.x += Math.cos(a) * 90; p.y = clamp(p.y + Math.sin(a) * 90, -300, 300);
-          p.invuln = 0; hurtPlayer(6, null);
-          banner('RICUCITO ALTROVE', 'Sei caduto in uno Strappo', 1.2, '#c94a6a');
-        }
+        forPls(() => {
+          const q = G.p, a = rnd(TAU); q.x += Math.cos(a) * 90; q.y = clamp(q.y + Math.sin(a) * 90, -300, 300);
+          q.invuln = 0; hurtPlayer(6, null);
+          banner('RICUCITO ALTROVE', (coop() ? G.cur.label + ' è caduto' : 'Sei caduto') + ' in uno Strappo', 1.2, '#c94a6a');
+        }, q => h.r > 8 && d2(q.x, q.y, h.x, h.y) < (h.r - 3) ** 2 && !(q.flyT > 0));
       }
       G.holes = G.holes.filter(h => h.life > 0);
     },
@@ -471,7 +472,7 @@ const STAGES = {
     table(t) { return t < 60 ? [['commuter', 7], ['ticket', 3]] : t < 150 ? [['commuter', 5], ['ticket', 2], ['inspector', 2], ['suitcase', 1]] : [['commuter', 4], ['ticket', 2], ['inspector', 3], ['suitcase', 1]]; },
     init() { G.trainT = 22; G.trains = []; G.rushT = 80; G.trainPlan = null; },
     clampPos(x, y) { return [x, y]; },
-    spawnPos(a) { const p = G.p; return [p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 260]; },
+    spawnPos(a) { const p = G.center || G.p; return [p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 260]; },
     constrainPlayer() {},
     trackNear(y, off = 0) { return (Math.round(y / 240) + off) * 240; },
     trackName(ty) { return ((((ty / 240) % 9) + 9) % 9) + 1; },
@@ -499,14 +500,16 @@ const STAGES = {
             else if (!e.boss) hurtEnemy(e, 999, { silent: true });
           }
         });
-        if (!tr.hitP && Math.abs(p.y - tr.y) < 16 && p.x > x0 && p.x < x1 && !(p.flyT > 0)) { tr.hitP = true; hurtPlayer(30, null); }
+        tr.hitSet = tr.hitSet || new Set();
+        forPls(pl => { tr.hitSet.add(pl); hurtPlayer(30, null); }, q => !tr.hitSet.has(q.pl) && Math.abs(q.y - tr.y) < 16 && q.x > x0 && q.x < x1 && !(q.flyT > 0));
       }
       G.trains = G.trains.filter(tr => (tr.dir > 0 ? tr.x - 600 < camX + W + 100 : tr.x + 600 > camX - 100));
       G.rushT -= dt;
       if (G.rushT <= 0 && !G.bossE) {
         G.rushT = 80;
         banner('ORA DI PUNTA', 'Una marea di Pendolari sta arrivando', 1.8, '#f2c230');
-        for (let i = 0; i < 28; i++) { const side = i % 2 ? 1 : -1; spawnEnemy('commuter', p.x + side * rnd(330, 400), p.y + rnd(-150, 150)); }
+        const c0 = G.center || p;
+        for (let i = 0; i < 28; i++) { const side = i % 2 ? 1 : -1; spawnEnemy('commuter', c0.x + side * rnd(330, 400), c0.y + rnd(-150, 150)); }
       }
     },
     drawFloor(c) {
@@ -570,7 +573,7 @@ const STAGES = {
     init() { G.ringR = [620, 500, 390, 300]; G.depth = 0; G.tollT = 100; G.waveT = 30; G.wave = null; G.runes = []; },
     radius() { return G.ringR[Math.min(G.depth, 3)]; },
     clampPos(x, y) { const R = STAGES.pozzo.radius() - 16; const l = Math.hypot(x, y); return l > R ? [x / l * R, y / l * R] : [x, y]; },
-    spawnPos(a) { const p = G.p; return STAGES.pozzo.clampPos(p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 260); },
+    spawnPos(a) { const p = G.center || G.p; return STAGES.pozzo.clampPos(p.x + Math.cos(a) * 380, p.y + Math.sin(a) * 260); },
     constrainPlayer(p) {
       const R = G.insideBell ? 42 : STAGES.pozzo.radius() - 8;
       const l = Math.hypot(p.x, p.y);
@@ -600,13 +603,14 @@ const STAGES = {
       if (G.wave) {
         const wv = G.wave, prev = wv.r;
         wv.r += 210 * dt;
-        const pd = Math.hypot(p.x, p.y);
-        if (!wv.hitP && pd >= prev && pd < wv.r) {
-          wv.hitP = true;
-          const safe = G.runes.some(r => d2(r.x, r.y, p.x, p.y) < 16 * 16) || p.flyT > 0 || G.insideBell;
-          if (!safe) { p.invuln = 0; hurtPlayer(Math.max(16, p.maxHp * 0.2), null); }
-          else fxText(p.x, p.y - 18, 'SILENZIO', '#bfe4ff', 0.8);
-        }
+        wv.hitSet = wv.hitSet || new Set();
+        forPls(pl => {
+          const q = G.p;
+          wv.hitSet.add(pl);
+          const safe = G.runes.some(r => d2(r.x, r.y, q.x, q.y) < 16 * 16) || q.flyT > 0 || G.insideBell;
+          if (!safe) { q.invuln = 0; hurtPlayer(Math.max(16, q.maxHp * 0.2), null); }
+          else fxText(q.x, q.y - 18, 'SILENZIO', '#bfe4ff', 0.8);
+        }, q => { const pd = Math.hypot(q.x, q.y); return !wv.hitSet.has(q.pl) && pd >= prev && pd < wv.r; });
         for (const e of G.enemies) { if (e.boss || e.dead) continue; const d = Math.hypot(e.x, e.y); if (d >= prev && d < wv.r) e.stun = 1; }
         if (wv.r > st.radius()) { G.wave = null; G.runes = []; G.waveT = 30; }
       }

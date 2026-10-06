@@ -38,6 +38,13 @@ function buyPower(it) {
   saveMeta();
   return true;
 }
+// Salvataggi dell'Alfa 0.3: quanto era stato speso davvero con i prezzi vecchi
+(function migrateSpent() {
+  if (META.spent !== undefined || typeof SHOP === 'undefined') return;
+  let spent = 0;
+  for (const it of SHOP) for (let k = 0; k < (META.up[it.id] || 0); k++) spent += shopCost(it, k);
+  META.spent = spent; saveMeta();
+})();
 function refundAll() {
   let back = META.spent || 0;
   if (!back) {

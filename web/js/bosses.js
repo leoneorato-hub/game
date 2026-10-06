@@ -589,7 +589,7 @@ for (const [id, def] of Object.entries(BOSSES)) {
   ETYPES[id] = {
     hp: def.hp, spd: def.spd || 40, dmg: def.mini ? 14 : 18, r: def.r, xp: def.mini ? 40 : 0,
     boss: !def.mini, elite: !!def.mini, name: def.name, kbRes: 0.95, blood: def.col,
-    init(e) { e.def = def; e.mv = def.mv || 'chase'; e.wait = 1; e.noSep = true; e.takeMul = def.takeMul; def.init?.(e); if (def.mini) e.hp = e.maxHp = def.hp * (1 + G.t / 300); },
+    init(e) { e.def = def; e.mv = def.mv || 'chase'; e.wait = 1; e.noSep = true; e.takeMul = def.takeMul; def.init?.(e); if (def.mini) { const n = G.players ? G.players.length : 1; e.hp = e.maxHp = def.hp * (1 + G.t / 300) * (1 + 0.55 * (n - 1)) * (G.curse || 1); } },
     ai: bossAI,
     draw: def.spr ? (c, e, x, y) => bossDraw(c, e, x, y) : (c, e, x, y) => bossDraw(c, e, x, y),
   };

@@ -201,7 +201,8 @@ function hurtEnemy(e, dmg, o = {}) {
   if (o.stun && !e.boss) e.stun = Math.max(e.stun, o.stun);
   if (o.slow) { e.slow = Math.max(e.slow, o.slow); e.slowT = Math.max(e.slowT, o.slowT || 1); }
   if (o.freeze && !e.boss) { e.freezeT = Math.max(e.freezeT, o.freeze); }
-  if (o.burn) { e.burnT = 2; e.burnD = o.burn; }
+  if (o.burn) { e.burnT = 2; e.burnD = o.burn; e.burnPl = G.cur; }
+  if (e.doomT > 0 && !e.doomPl) e.doomPl = G.cur;
   G.dmgDealt += d;
   if (G.cur && !e.prop) { G.cur.dmg += d; if (!o.ultSrc) G.p.ult = Math.min(100, (G.p.ult || 0) + Math.min(d, 60) * 0.0035); }
   e.onDamaged?.(e, d);
@@ -238,6 +239,7 @@ function killEnemy(e, o = {}) {
 
 // --- Danno al giocatore -------------------------------------------------------------
 function hurtPlayer(amount, src) {
+  if (G.p && G.p.pl && G.cur && G.p.pl !== G.cur && coop()) return withPl(G.p.pl, () => hurtPlayer(amount, src));
   const p = G.p;
   if (p.invuln > 0 || G.over || SET.assist || MODE !== 'play' || (G.cur && G.cur.down) || p.ultInv > 0) return;
   if (src && src.weakT > 0) amount *= 0.7;
@@ -324,13 +326,13 @@ function updateEnemies(dt) {
     // Stati
     if (e.burnT > 0) {
       e.burnT -= dt; e.burnTick = (e.burnTick || 0) - dt;
-      if (e.burnTick <= 0) { e.burnTick = 0.3; hurtEnemy(e, e.burnD, { silent: true }); if (e.dead) continue; fxParticles(e.x, e.y - 3, '#ff8a2a', 1, 20, 0.3); }
+      if (e.burnTick <= 0) { e.burnTick = 0.3; if (multi && e.burnPl && e.burnPl !== G.cur) withPl(e.burnPl, () => hurtEnemy(e, e.burnD, { silent: true })); else hurtEnemy(e, e.burnD, { silent: true }); if (e.dead) continue; fxParticles(e.x, e.y - 3, '#ff8a2a', 1, 20, 0.3); }
     }
     if (e.doomT > 0) {
       e.doomT -= dt;
       if (e.doomT <= 0) {
         fxText(e.x, e.y - 10, '☠', '#ff3a3a', 0.6);
-        hurtEnemy(e, e.doomDmg, { silent: true });
+        if (multi && e.doomPl && e.doomPl !== G.cur) withPl(e.doomPl, () => hurtEnemy(e, e.doomDmg, { silent: true })); else hurtEnemy(e, e.doomDmg, { silent: true });
         if (e.dead) continue;
         if (e.doomRepeat > 0) { e.doomRepeat--; e.doomT = 1.1; }
       }
@@ -348,7 +350,7 @@ function updateEnemies(dt) {
       continue;
     }
     // l'IA "vede" come G.p il giocatore più vicino (solo durante la sua mossa)
-    if (mv > 0 && !e.prop) { G.p = p; try { e.ai(e, dt); } finally { G.p = lp; } }
+    if (mv > 0 && !e.prop) { if (multi && tgt !== G.cur) withPl(tgt, () => e.ai(e, dt)); else e.ai(e, dt); }
     e.x += (e.vx * mv + e.kx) * dt;
     e.y += (e.vy * mv + e.ky) * dt;
     const decay = Math.min(1, dt * 9);
@@ -391,14 +393,17 @@ function updateEnemies(dt) {
 
 // --- Proiettili del giocatore ----------------------------------------------------------
 function shoot(o) {
-  const pr = Object.assign({ r: 3, pierce: 0, life: 1, hit: new Set(), col: '#fff', kind: 'dot', vx: 0, vy: 0, dmg: 10, homing: 0, rot: 0 }, o);
+  const pr = Object.assign({ r: 3, pierce: 0, life: 1, hit: new Set(), col: '#fff', kind: 'dot', vx: 0, vy: 0, dmg: 10, homing: 0, rot: 0, pl: G.cur }, o);
   G.projs.push(pr);
   return pr;
 }
 
 function updateProjs(dt) {
+  const home = G.cur, multi = coop();
   for (const pr of G.projs) {
     if (pr.dead) continue;
+    // ogni proiettile si risolve nel contesto di chi l'ha sparato (cambia contesto solo quando cambia proprietario)
+    if (multi) usePl(pr.pl && G.players.includes(pr.pl) ? pr.pl : home);
     pr.life -= dt;
     if (pr.update) pr.update(pr, dt);
     if (pr.homing) {
@@ -432,6 +437,7 @@ function updateProjs(dt) {
     }
     if (pr.life <= 0 && !pr.dead) { pr.dead = true; pr.onEnd?.(pr); }
   }
+  if (multi) usePl(home);
 }
 
 // Colpo a raggio (hitscan / fascio): colpisce chi sta entro width dal segmento
@@ -581,7 +587,7 @@ function updateGems(dt) {
       k.x += nx * k.spd * dt; k.y += ny * k.spd * dt;
     }
     for (const pl of pls) {
-      if (d2(k.x, k.y, pl.p.x, pl.p.y) < (pl.p.r + 7) * (pl.p.r + 7)) { if (pl === G.cur) collectPickup(k); else withPl(pl, () => collectPickup(k)); break; }
+      if (d2(k.x, k.y, pl.p.x, pl.p.y) < (pl.p.r + 7) * (pl.p.r + 7)) { if (pl === G.cur) collectPickup(k); else withPl(pl, () => collectPickup(k)); if (k.dead) break; }
     }
   }
 }
@@ -623,7 +629,7 @@ function collectPickup(k) {
       break;
     case 'pk_bomb':
       k.dead = true;
-      setTimeout(() => { if (!G || G.over) return; aoe(k.x, k.y, 90, 160, { kb: 320, src: 'bomb' }, '#ffb03a'); fxParticles(k.x, k.y, '#ffb03a', 40, 180, 0.6, 2); shake(8); sfx('boom'); }, 450);
+      later(() => { aoe(k.x, k.y, 90, 160, { kb: 320, src: 'bomb' }, '#ffb03a'); fxParticles(k.x, k.y, '#ffb03a', 40, 180, 0.6, 2); shake(8); sfx('boom'); }, 450);
       fxText(k.x, k.y - 12, 'BOMBA!', '#ffb03a', 0.6);
       break;
     case 'pk_purse': case 'pk_purse_big': {

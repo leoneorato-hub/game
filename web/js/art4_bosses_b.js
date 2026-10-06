@@ -15,9 +15,12 @@
   const LV = (() => { const v = [-0.55, -0.72, 0.6], l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); return v.map(a => a / l); })();
   const LX = LV[0], LY = LV[1], LZ = LV[2];
   const lit = (nx, ny, nz) => { const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1, d = (nx * LX + ny * LY + nz * LZ) / l; return 0.26 + 0.7 * (d > -0.2 ? d : -0.2); };
+  const RR = [0, 0]; // intervallo di riga riutilizzato (niente allocazioni per riga)
+  const span = (lo, hi) => { RR[0] = lo; RR[1] = hi; return RR; };
   const RGB = {};
   const rgbOf = h => RGB[h] || (RGB[h] = HEX(h));
-  const MAT = (r, o = {}) => Object.assign({ r }, o);
+  // materiali: tutti con la stessa forma (accessi monomorfici nel cuocitore)
+  const MAT = (r, o = {}) => ({ r, glow: !!o.glow, base: o.base ?? 1, ol: o.ol || null, ink: o.ink || null, soft: !!o.soft, noOl: !!o.noOl, nocast: !!o.nocast, _rgb: null, _ol: 0 });
   const N4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
   class Px {
@@ -25,38 +28,50 @@
       this.w = w; this.h = h; const N = w * h;
       this.sid = new Int32Array(N); this.mt = new Array(N).fill(null); this.tn = new Int8Array(N); this.fx = new Uint8Array(N);
       this.n = 0; this.info = [null];
+      this.bx0 = w; this.by0 = h; this.bx1 = -1; this.by1 = -1;
     }
+    _bb(xa, ya, xb, yb) { if (xa < this.bx0) this.bx0 = xa; if (ya < this.by0) this.by0 = ya; if (xb > this.bx1) this.bx1 = xb; if (yb > this.by1) this.by1 = yb; }
     _new(o) { this.n++; this.info[this.n] = { edge: o.edge, cast: o.cast !== false }; return this.n; }
     // riempimento generico: f(x,y) -> null fuori | v (0..1) luminosità
-    fill(x0, y0, x1, y1, f, m, o = {}) {
+    // rr(yc) opzionale: intervallo [lo, hi] della riga (in coordinate continue) per saltare i vuoti
+    fill(x0, y0, x1, y1, f, m, o = {}, rr) {
       const keep = !!o.keep, id = keep ? 0 : (o.same ? this.n : this._new(o));
-      const only = o.only ? [].concat(o.only) : null;
-      for (let y = Math.max(0, Math.floor(y0)); y <= Math.min(this.h - 1, Math.ceil(y1)); y++)
-        for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(this.w - 1, Math.ceil(x1)); x++) {
+      const only = o.only ? [].concat(o.only) : null, clip = o.clip || null, tone = o.tone, bias = o.bias || 0;
+      const W = this.w, sid = this.sid, mt = this.mt, tn = this.tn, fx = this.fx;
+      const ya = Math.max(0, Math.floor(y0)), yb = Math.min(this.h - 1, Math.ceil(y1)), xa = Math.max(0, Math.floor(x0)), xb = Math.min(W - 1, Math.ceil(x1));
+      const nr = m ? m.r.length : 0;
+      if (!keep && m) this._bb(xa, ya, xb, yb);
+      for (let y = ya; y <= yb; y++) {
+        let xs = xa, xe = xb;
+        if (rr) { const r = rr(y + 0.5); if (!r) continue; const lo = Math.floor(r[0] - 0.5), hi = Math.ceil(r[1] - 0.5); if (lo > xs) xs = lo; if (hi < xe) xe = hi; }
+        for (let x = xs; x <= xe; x++) {
+          const i = y * W + x;
+          if (keep && !sid[i]) continue;
+          if (only && !only.includes(mt[i])) continue;
           const v = f(x + 0.5, y + 0.5);
           if (v === null || v === undefined || v === false) continue;
-          if (o.clip && !o.clip(x, y)) continue;
-          const i = y * this.w + x;
-          if (keep && !this.sid[i]) continue;
-          if (only && !only.includes(this.mt[i])) continue;
-          if (m === null) { this.sid[i] = 0; this.mt[i] = null; continue; }
-          if (!keep) this.sid[i] = id;
-          this.mt[i] = m;
-          if (o.tone !== undefined) { this.tn[i] = typeof o.tone === 'function' ? o.tone(x, y) : o.tone; this.fx[i] = 1; }
-          else { this.tn[i] = this.q(m, (typeof v === 'number' ? v : 0.5) + (o.bias || 0)); this.fx[i] = 0; }
+          if (clip && !clip(x, y)) continue;
+          if (m === null) { sid[i] = 0; mt[i] = null; continue; }
+          if (!keep) sid[i] = id;
+          mt[i] = m;
+          if (tone !== undefined) { tn[i] = typeof tone === 'function' ? tone(x, y) : tone; fx[i] = 1; }
+          else { const t = Math.floor(((typeof v === 'number' ? v : 0.5) + bias) * nr); tn[i] = t < 0 ? 0 : t >= nr ? nr - 1 : t; fx[i] = 0; }
         }
+      }
       return this;
     }
     q(m, v) { const n = m.r.length; return clamp(Math.floor(v * n), 0, n - 1); }
     ell(cx, cy, rx, ry, m, o = {}) {
       const rot = o.rot || 0, c = Math.cos(rot), s = Math.sin(rot), R = Math.max(rx, ry) + 1, fl = o.fl ?? 1;
-      return this.fill(cx - R, cy - R, cx + R, cy + R, (x, y) => {
+      const Rx = rot ? R : rx + 1, Ry = rot ? R : ry + 1;
+      return this.fill(cx - Rx, cy - Ry, cx + Rx, cy + Ry, (x, y) => {
         const dx = x - cx, dy = y - cy, u = (dx * c + dy * s) / rx, w = (-dx * s + dy * c) / ry, d = u * u + w * w;
         if (d > 1) return null;
         if (o.v) return o.v(x, y);
+        if (o.tone !== undefined) return 0.5;
         const nx = u * c - w * s, ny = u * s + w * c;
         return lit(nx * fl, ny * fl, Math.sqrt(Math.max(0, 1 - d)));
-      }, m, o);
+      }, m, o, rot ? undefined : yc => { const w = (yc - cy) / ry; if (w < -1 || w > 1) return null; const hw = rx * Math.sqrt(Math.max(0, 1 - w * w)); return span(cx - hw - 0.01, cx + hw + 0.01); });
     }
     // uovo: semiasse verticale diverso sopra/sotto, si stringe verso il basso
     egg(cx, cy, rx, ryT, ryB, taper, m, o = {}) {
@@ -66,8 +81,9 @@
         const u = (x - cx) / rxe, w = dy / ry, d = u * u + w * w;
         if (d > 1) return null;
         if (o.v) return o.v(x, y);
+        if (o.tone !== undefined) return 0.5;
         return lit(u * fl, w * fl, Math.sqrt(Math.max(0, 1 - d)));
-      }, m, o);
+      }, m, o, yc => { const dy = yc - cy, ry = dy < 0 ? ryT : ryB, w = dy / ry; if (w < -1 || w > 1) return null; const hw = rx * (1 - taper * Math.max(0, dy / ryB)) * Math.sqrt(Math.max(0, 1 - w * w)); return span(cx - hw - 0.01, cx + hw + 0.01); });
     }
     cap(x1, y1, x2, y2, r, m, o = {}) {
       const r2 = o.r2 ?? r, dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy || 1, Mx = Math.max(r, r2) + 1, fl = o.fl ?? 1;
@@ -76,8 +92,16 @@
         const px = x - (x1 + dx * t), py = y - (y1 + dy * t), rr = r + (r2 - r) * t, d2 = (px * px + py * py) / (rr * rr);
         if (d2 > 1) return null;
         if (o.v) return o.v(x, y);
+        if (o.tone !== undefined) return 0.5;
         return lit(px / rr * fl, py / rr * fl, Math.sqrt(Math.max(0, 1 - d2)));
-      }, m, o);
+      }, m, o, yc => {
+        const R = Mx - 1;
+        let ta = 0, tb = 1;
+        if (Math.abs(dy) < 1e-6) { if (Math.abs(y1 - yc) > R) return null; }
+        else { ta = (yc - R - y1) / dy; tb = (yc + R - y1) / dy; if (ta > tb) { const t = ta; ta = tb; tb = t; } if (ta < 0) ta = 0; if (tb > 1) tb = 1; if (ta > tb) return null; }
+        const xa = x1 + dx * ta, xb = x1 + dx * tb;
+        return span(Math.min(xa, xb) - R - 0.01, Math.max(xa, xb) + R + 0.01);
+      });
     }
     poly(pts, m, o = {}) {
       // scanline: per ogni riga si calcolano una volta gli attraversamenti dei lati
@@ -101,9 +125,10 @@
         for (let q = 0; q < xs.length; q++) if (xs[q] > x) c++;
         if (!(c & 1)) return null;
         if (o.v) return o.v(x, y);
+        if (o.tone !== undefined) return 0.5;
         const u = clamp((x - cx) / hw, -1, 1), w = clamp((y - cy) / hh, -1, 1);
         return lit(u * fl, w * fl * 0.8, Math.sqrt(Math.max(0.05, 1 - (u * u + w * w) * fl * fl)));
-      }, m, o);
+      }, m, o, yc => { const xs = rows[yc - 0.5]; if (!xs || !xs.length) return null; let lo = Infinity, hi = -Infinity; for (let q = 0; q < xs.length; q++) { if (xs[q] < lo) lo = xs[q]; if (xs[q] > hi) hi = xs[q]; } return span(lo - 0.01, hi + 0.01); });
     }
     rect(x, y, w, h, m, o = {}) { return this.poly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], m, o); }
     // pixel singolo / linea (Bresenham) con tono esplicito
@@ -114,7 +139,7 @@
       if (o.keep && !this.sid[i]) return this;
       if (o.only && (Array.isArray(o.only) ? !o.only.includes(this.mt[i]) : o.only !== this.mt[i])) return this;
       if (m === null) { this.sid[i] = 0; this.mt[i] = null; return this; }
-      if (!o.keep) { if (!(same || o.same)) this._new(o); this.sid[i] = this.n; }
+      if (!o.keep) { if (!(same || o.same)) this._new(o); this.sid[i] = this.n; this._bb(x, y, x, y); }
       this.mt[i] = m; this.tn[i] = t ?? 2; this.fx[i] = 1;
       return this;
     }
@@ -152,82 +177,100 @@
     // cottura: pulizia orfani, ombre portate, linee interne, nuclei emissivi, contorno
     bake(o = {}) {
       const { w, h, sid, mt, tn, fx, info } = this;
-      const N = w * h;
-      const sidAt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : sid[y * w + x]);
-      const glowAt = (x, y) => { if (x < 0 || y < 0 || x >= w || y >= h) return false; const m = mt[y * w + x]; return !!(m && m.glow && sid[y * w + x]); };
-      // 1) pixel orfani: un tono isolato dentro la stessa forma prende il tono dei vicini
-      const T0 = Int8Array.from(tn), OFF = [w, -w, 1, -1];
-      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
-        const i = y * w + x, s = sid[i], m = mt[i];
-        if (!s || fx[i] || !m || m.glow) continue;
-        let same = 0, nb = 0, t1 = -1, c1 = 0, t2 = -1, c2 = 0;
-        for (let q = 0; q < 4; q++) {
-          const j = i + OFF[q];
-          if (sid[j] !== s || mt[j] !== m) continue;
-          nb++; const tj = T0[j];
-          if (tj === T0[i]) same++;
-          else if (tj === t1 || t1 < 0) { t1 = tj; c1++; } else if (tj === t2 || t2 < 0) { t2 = tj; c2++; }
-        }
+      const c = makeCanvas(w, h), cx = c.getContext('2d'), id = new ImageData(w, h);
+      if (this.bx1 < 0) return c;
+      const X0 = Math.max(0, this.bx0 - 1), X1 = Math.min(w - 1, this.bx1 + 1), Y0 = Math.max(0, this.by0 - 1), Y1 = Math.min(h - 1, this.by1 + 1);
+      const U = new Uint32Array(id.data.buffer), G = new Uint8Array(w * h), T0 = Int8Array.from(tn);
+      // 1) maschera emissiva + pixel orfani (un tono isolato dentro la stessa forma prende il tono dei vicini)
+      for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
+        const i = y * w + x, s = sid[i];
+        if (!s) continue;
+        const m = mt[i];
+        if (!m) continue;
+        if (m.glow) { G[i] = 1; continue; }
+        if (fx[i] || x === 0 || y === 0 || x === w - 1 || y === h - 1) continue;
+        const t0 = T0[i];
+        let same = 0, nb = 0, t1 = -1, c1 = 0, t2 = -1, c2 = 0, j, tj;
+        j = i + w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i - w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i + 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i - 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
         if (nb >= 3 && same === 0) tn[i] = c1 >= c2 ? t1 : t2;
       }
-      const T = Int8Array.from(tn);
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const i = y * w + x, s = sid[i], m = mt[i];
-        if (!s || !m) continue;
-        if (m.glow) {
-          if (fx[i]) continue;
-          let d = 1;
-          for (; d < 4; d++) if (!glowAt(x, y + d) || !glowAt(x, y - d) || !glowAt(x + d, y) || !glowAt(x - d, y)) break;
-          T[i] = clamp((m.base ?? 1) + d - 1, 0, m.r.length - 1);
+      const gAt = (x, y) => x >= 0 && y >= 0 && x < w && y < h && G[y * w + x] === 1;
+      const pack = m => m._rgb || (m._rgb = m.r.map(hx => { const v = rgbOf(hx); return (255 << 24 | v[2] << 16 | v[1] << 8 | v[0]) >>> 0; }));
+      const inkOf = mm => mm.glow || mm.soft ? 0 : mm.ink ? (mm._ol || (mm._ol = pack({ r: [mm.ink] })[0])) : INKU;
+      const softOf = mm => mm._ol || (mm._ol = pack({ r: [mm.ol || mm.r[0]] })[0]);
+      const INKU = pack({ r: [INK] })[0], outline = o.outline !== false;
+      // 2) colore: nuclei emissivi, linee interne, ombre portate · contorno d'inchiostro sui vuoti
+      for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
+        const i = y * w + x, s = sid[i], m = s ? mt[i] : null;
+        if (!m) {
+          if (!outline) continue;
+          if (!((y + 1 < h && sid[i + w]) || (y > 0 && sid[i - w]) || (x + 1 < w && sid[i + 1]) || (x > 0 && sid[i - 1]))) continue;
+          let hard = 0, soft = null, mm;
+          if (y + 1 < h && sid[i + w] && (mm = mt[i + w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (y > 0 && sid[i - w] && (mm = mt[i - w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (x + 1 < w && sid[i + 1] && (mm = mt[i + 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (x > 0 && sid[i - 1] && (mm = mt[i - 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (hard) U[i] = hard; else if (soft) U[i] = softOf(soft);
           continue;
         }
-        const inf = info[s];
-        if (inf && inf.edge !== undefined && inf.edge !== false) {
-          let e = false;
-          for (let q = 0; q < 4; q++) {
-            const X = x + (q === 2 ? 1 : q === 3 ? -1 : 0), Y = y + (q === 0 ? 1 : q === 1 ? -1 : 0);
-            const s2 = sidAt(X, Y);
-            if (s2 && s2 !== s && s2 < s && !glowAt(X, Y)) { e = true; break; }
+        let t = tn[i];
+        const R = pack(m), L = R.length - 1;
+        if (G[i]) {
+          if (!fx[i]) {
+            let d = 1;
+            for (; d < 4; d++) if (!gAt(x, y + d) || !gAt(x, y - d) || !gAt(x + d, y) || !gAt(x - d, y)) break;
+            t = m.base + d - 1;
           }
-          if (e) { T[i] = inf.edge === true ? 0 : Math.min(T[i], inf.edge); continue; }
+        } else {
+          const edge = info[s].edge;
+          let e = false;
+          if (edge !== undefined && edge !== false) {
+            let s2;
+            if (y + 1 < h && (s2 = sid[i + w]) && s2 < s && !G[i + w]) e = true;
+            else if (y > 0 && (s2 = sid[i - w]) && s2 < s && !G[i - w]) e = true;
+            else if (x + 1 < w && (s2 = sid[i + 1]) && s2 < s && !G[i + 1]) e = true;
+            else if (x > 0 && (s2 = sid[i - 1]) && s2 < s && !G[i - 1]) e = true;
+            if (e) t = edge === true ? 0 : Math.min(t, edge);
+          }
+          if (!e && !fx[i] && !m.nocast && y > 0) {
+            const up = sid[i - w];
+            if (up > s && info[up].cast && !G[i - w] && t > 0) t--;
+          }
         }
-        if (!fx[i] && !m.nocast) {
-          const up = sidAt(x, y - 1);
-          if (up && up > s && info[up] && info[up].cast && !glowAt(x, y - 1)) T[i] = Math.max(0, T[i] - 1);
-        }
-      }
-      const c = makeCanvas(w, h), cx = c.getContext('2d'), id = cx.createImageData(w, h), D = id.data;
-      const put = (i, hex) => { const v = rgbOf(hex); D[i * 4] = v[0]; D[i * 4 + 1] = v[1]; D[i * 4 + 2] = v[2]; D[i * 4 + 3] = 255; };
-      for (let i = 0; i < N; i++) if (sid[i] && mt[i]) put(i, mt[i].r[clamp(T[i], 0, mt[i].r.length - 1)]);
-      if (o.outline !== false) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const i = y * w + x;
-        if (sid[i]) continue;
-        let ink = null, soft = null;
-        for (let q = 0; q < 4; q++) {
-          const X = x + (q === 2 ? 1 : q === 3 ? -1 : 0), Y = y + (q === 0 ? 1 : q === 1 ? -1 : 0);
-          if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
-          const j = Y * w + X, mm = mt[j];
-          if (!mm || !sid[j] || mm.noOl) continue;
-          if (mm.glow || mm.soft) soft = mm; else ink = mm.ink || INK;
-        }
-        if (ink) put(i, ink); else if (soft) put(i, soft.ol || soft.r[0]);
+        U[i] = R[t < 0 ? 0 : t > L ? L : t];
       }
       cx.putImageData(id, 0, 0);
       return c;
     }
   }
-  function reg3(id, w, h, draw) {
-    for (const [suf, k, p2] of [['_0', 0, 0], ['_1', 1, 0], ['_p2', 0, 1]]) {
+  // Registrazione nel registro SPR con la stessa forma di regSprite ({img, white, flip, flipWhite, w, h}),
+  // ma le varianti bianca/specchiata si creano solo al primo uso (molti boss non vengono mai
+  // specchiati): così il caricamento resta veloce.
+  function regLazy(name, img) {
+    const o = { img };
+    const lazy = (k, mk) => Object.defineProperty(o, k, { configurable: true, enumerable: true, get() { const v = mk(); Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true }); return v; } });
+    lazy('white', () => tinted(img, '#ffffff'));
+    lazy('flip', () => flipped(img));
+    lazy('flipWhite', () => flipped(o.white));
+    o.w = img.width; o.h = img.height;
+    SPR[name] = o;
+    return o;
+  }
+  function reg3(id, w, h, draw, only0) {
+    for (const [suf, k, p2] of only0 ? [['_0', 0, 0]] : [['_0', 0, 0], ['_1', 1, 0], ['_p2', 0, 1]]) {
       const P = new Px(w, h);
       draw(P, k, p2);
-      regSprite('B_' + id + suf, P.bake());
+      regLazy('B_' + id + suf, P.bake());
     }
   }
   function reg2(name, w, h, draw) {
     for (const [suf, k] of [['', 0], ['_b', 1]]) {
       const P = new Px(w, h);
       draw(P, k);
-      regSprite(name + suf, P.bake());
+      regLazy(name + suf, P.bake());
     }
   }
   // lingua di fiamma (emissiva): base in (x,y), alta h, larga w, inclinata di lean
@@ -583,7 +626,7 @@
         P.line(Math.round((x0 + x1) / 2), 1, Math.round((x0 + x1) / 2), 22, WOOD, 1, { keep: true });
         P.px(x0 + 1.5, 4, WOOD, 4, { keep: true }); P.px(x0 + 1.5, 18, WOOD, 4, { keep: true });
       }
-    });
+    }, true); // il gioco usa solo B_momeye_0 (effetto 'img' della Mamma)
   }
 
   // =============================================================================

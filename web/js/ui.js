@@ -116,7 +116,8 @@ const UI = {
   lobby: [],
   openLobby() {
     this.lobby = this.lobby.filter(m => m.dev);
-    this.lobbyGo = null;
+    clearTimeout(this.lobbyGo); this.lobbyGo = null;
+    this.lobby.forEach(m => { m.ready = false; });
     $('#lobby-help').innerHTML = ['kb1', 'kb2', 'kb3', 'kb4', 'pad0'].map(d => `<span><b>${esc(DEVICES[d].name)}</b> · ${esc(DEVICES[d].hint)}</span>`).join('');
     this.renderLobby();
     this.back = () => this.openModes();
@@ -369,7 +370,9 @@ const UI = {
       this.say($('#shop-voice'), 'ditale', back ? 'Rimborsati ' + back + ' Filo. Scuci pure, poi ricuci come preferisci.' : 'Non c\'è niente da rimborsare, tesoro.');
     };
     const sayBuy = () => this.say($('#shop-voice'), 'ditale', pick(['Ottima scelta! Te lo cucio subito.', 'Venduto! Niente resi… a parte il pulsante "Rimborsa tutto". Quello sì.', 'Ah, un intenditore. O una intenditrice. O un recipiente di Vuoto.', 'Un punto in più, un pericolo in meno.']));
+    det.innerHTML = '';
     if (this.shopTab === 'pu') {
+      if (!POWERUPS.some(it => it.id === this.shopSel)) this.shopSel = 'might';
       for (const it of POWERUPS) {
         const lvl = powerLvl(it.id), max = lvl >= it.max;
         const b = el('button', 'pu-tile nav' + (max ? ' maxed' : '') + (this.shopSel === it.id ? ' is-sel' : ''));
@@ -457,7 +460,8 @@ const UI = {
   // ------------------------------------------------------------------ LEVEL-UP
   openLevelUp() {
     MODE = 'levelup';
-    if (!G.lvQueue.length) { G.pendingLv--; G.lvQueue = alivePls().slice(); }
+    if (!G.lvQueue.length) { G.pendingLv--; G.lvQueue = G.players.slice(); }
+    this.choosing = false; this.lvLock = performance.now() + 220;
     const pl = G.lvQueue.shift();
     usePl(pl); this.lvPl = pl;
     sfx('lvl');
@@ -523,7 +527,9 @@ const UI = {
   },
   choose(i) {
     const o = this.levelOpts[i];
-    if (!o) return;
+    if (!o || this.choosing || performance.now() < (this.lvLock || 0)) return;
+    this.choosing = true;
+    document.querySelectorAll('.lv-card').forEach(b => { b.disabled = true; });
     const card = document.querySelectorAll('.lv-card')[i];
     if (card) card.classList.add('chosen');
     applyOption(o);
@@ -535,17 +541,19 @@ const UI = {
   },
   afterLevel() {
     if (!G) return;
+    this.choosing = false;
     if (G.lvQueue.length || G.pendingLv > 0) { this.openLevelUp(); return; }
     usePl(leadPl());
     this.hideAll();
     MODE = 'play';
   },
   reroll() { if (G.rerolls <= 0) return; G.rerolls--; sfx('ui'); this.levelOpts = buildOptions(3); this.renderLevelUp(); const f = document.querySelector('.lv-card'); f && f.focus(); },
-  skip() { G.thread += 10; this.afterLevel(); },
+  skip() { if (this.choosing) return; this.choosing = true; G.thread += 10; this.afterLevel(); },
 
   // ------------------------------------------------------------------ SCELTE (doni, reliquie)
   openChoice(title, sub, opts) {
     MODE = 'choice';
+    this.choosing = false; this.lvLock = performance.now() + 250;
     $('#ch-title').textContent = title;
     $('#ch-sub').textContent = sub;
     const row = $('#ch-cards');
@@ -555,7 +563,7 @@ const UI = {
       b.type = 'button';
       b.style.animationDelay = (i * 0.07) + 's';
       b.innerHTML = `<span class="lv-key">${i + 1}</span><img alt="" src="${iconURL(o.icon[0], o.icon[1], o.icon[2], 5)}"><span class="lv-name">${esc(o.name)}</span><span class="lv-line">${esc(o.line)}</span>`;
-      b.onclick = () => { o.act(); sfx('evo'); this.hideAll(); MODE = 'play'; if (G) usePl(leadPl()); };
+      b.onclick = () => { if (this.choosing || performance.now() < (this.lvLock || 0)) return; this.choosing = true; o.act(); sfx('evo'); this.hideAll(); MODE = 'play'; if (G) usePl(leadPl()); setTimeout(() => { this.choosing = false; }, 50); };
       row.appendChild(b);
     });
     this.back = null;
@@ -570,7 +578,10 @@ const UI = {
     $('#b-resume').onclick = () => this.resume();
     $('#b-p-controls').onclick = () => this.openControls('s-pause');
     $('#b-p-options').onclick = () => this.openOptions('s-pause');
-    $('#b-quit').onclick = () => { G = null; MODE = 'menu'; this.openTitle(); };
+    $('#b-quit').onclick = () => {
+      if (G && !G.over) { META.thread += Math.floor(G.thread); if (G.mode === 'endless') { META.endlessBest = Math.max(META.endlessBest || 0, G.loop || 0); META.endlessTime = Math.max(META.endlessTime || 0, Math.floor(G.t)); } saveMeta(); }
+      G = null; MODE = 'menu'; this.openTitle();
+    };
     this.back = () => this.resume();
     this.show('s-pause');
   },

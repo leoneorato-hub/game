@@ -156,13 +156,13 @@ function render(c) {
     if (tier >= 2) light(g.x, g.y, 10 + tier * 5, tier === 3 ? '#ffffff' : null);
   }
   for (const k of G.pickups) {
-    let spr = k.kind === 'food' ? (G.char.id === 'isaac' ? 'heart' : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
+    let spr = k.kind === 'food' ? (G.players.every(pl => pl.char.id === 'isaac') ? 'heart' : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
     if (!SPR[spr]) spr = PK_FALLBACK[spr] || 'chest';
     if (k.kind.startsWith('pk_')) { const pc = PK_GLOW[k.kind] || '#ffd23f'; c.fillStyle = pc; c.globalAlpha = 0.18 + 0.12 * Math.sin(k.t * 5); c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 9, 0, TAU); c.fill(); c.globalAlpha = 1; light(k.x, k.y, 26, pc); }
     const bob = Math.sin(k.t * 4) * 1.5;
     if (k.kind === 'chest') { c.fillStyle = `rgba(226,176,74,${0.25 + 0.2 * Math.sin(k.t * 6)})`; c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 10, 0, TAU); c.fill(); light(k.x, k.y, 36, '#ffd23f'); }
     if (k.kind === 'unravel') { k.x += (k.vx || 0) / 60; k.y += (k.vy || 0) / 60; if (G.arena) arenaClamp(k, false); }
-    if (k.kind === 'food' && G.char.noFood) c.globalAlpha = 0.45;
+    if (k.kind === 'food' && G.players.every(pl => pl.char.noFood)) c.globalAlpha = 0.45;
     drawSpr(c, spr, k.x, k.y + bob, false);
     c.globalAlpha = 1;
   }
@@ -573,7 +573,7 @@ function drawHUD(c) {
     const el = G.times.elites.find(x => x > t);
     if (el !== undefined && el < G.times.boss) next = (G.stage.story ? 'MINI-BOSS' : 'ÉLITE') + ' tra ' + fmtTime(el - t);
     else if (t < G.times.boss) next = 'BOSS tra ' + fmtTime(G.times.boss - t);
-  } else if (G.bossE && !G.bossE.dead && t < G.times.cont) next = 'IL CONTINUE tra ' + fmtTime(G.times.cont - t);
+  } else if (G.bossE && !G.bossE.dead && Number.isFinite(G.times.cont) && t < G.times.cont) next = 'IL CONTINUE tra ' + fmtTime(G.times.cont - t);
   if (next) txt(c, next, W / 2, 40, '#a89a88', 8, 'center');
 
   // C — Contatori con icone
@@ -640,9 +640,12 @@ function drawHUD(c) {
   }
 
   // Stati che il giocatore deve vedere subito
-  if (G.silenced) txt(c, 'SILENZIO — LE TUE ARMI TACCIONO', W / 2, H - 70, '#c9a6ff', 8, 'center');
+  const tagOf = pl => (coop() ? pl.label + ' · ' : '');
+  const silent = G.players.filter(pl => !pl.down && (pl === G.cur ? G.silenced : pl.silenced));
+  if (silent.length) txt(c, silent.map(tagOf).join('') + 'SILENZIO — LE ARMI TACCIONO', W / 2, H - (coop() ? 100 : 70), '#c9a6ff', 8, 'center');
   if (G.invertT > 0) txt(c, 'COMANDI INVERTITI ' + G.invertT.toFixed(1), W / 2, H - 80, '#d9a83a', 8, 'center');
-  if (G.overcharmed) txt(c, 'SOVRACCARICO: DANNO SUBITO ×2', W / 2, H - 90, '#e0303a', 8, 'center');
+  const oc = G.players.filter(pl => !pl.down && (pl === G.cur ? G.overcharmed : pl.overcharmed));
+  if (oc.length) txt(c, oc.map(tagOf).join('') + 'SOVRACCARICO: DANNO SUBITO ×2', W / 2, H - (coop() ? 120 : 90), '#e0303a', 8, 'center');
 
   // Vignetta cucita (pericolo): basta un giocatore in difficoltà
   const risky = G.players.some(pl => !pl.down && (pl.char.hpMode === 'anxiety' ? pl.p.hp / 100 > 0.7 : 1 - pl.p.hp / pl.p.maxHp > 0.66));
@@ -768,7 +771,7 @@ function slotBox(c, x, y, sz, col, on, glow) {
 function drawLoadout(c, x, y) {
   const ch = G.char, nW = ch.maxW || 6;
   const sup = passiveList();
-  const nS = Math.max(6, Math.min(16, sup.length));
+  const nS = Math.max(6, Math.min(24, sup.length));
   const rowsS = Math.ceil(nS / 8);
   const wSz = 17, sSz = 13;
   const w = 40 + Math.max(nW * (wSz + 3), Math.min(8, nS) * (sSz + 3)) + 4;
@@ -825,12 +828,12 @@ function drawHudPortrait(c, x, y, r, pl) {
   c.lineWidth = 1;
   c.strokeStyle = pl ? pl.col : '#e2b04a'; c.beginPath(); c.arc(x, y, r + 3.5, 0, TAU); c.stroke();
   // badge del tasto
-  const bx = x + r - 4, by = y + r - 6;
+  const bx = pl ? x - r - 6 : x + r - 4, by = pl ? y - r - 4 : y + r - 6;
   if (owned) {
     const ready = f >= 1;
     c.fillStyle = INK; c.fillRect(bx - 1, by - 1, 15, 11);
     c.fillStyle = ready ? U.col : '#2a1f2e'; c.fillRect(bx, by, 13, 9);
-    const key = pl && pl.dev !== 'solo' && pl.dev !== 'kb1' ? (pl.dev.startsWith('pad') ? 'Y' : '★') : (G.touch ? '★' : 'E');
+    const key = pl ? (pl.dev.startsWith('pad') ? 'Y' : (DEVICES[pl.dev] && DEVICES[pl.dev].ult1) || 'E') : (G.touch ? '★' : 'E');
     txt(c, key, bx + 7, by + 1, ready ? INK : '#a89a88', 8, 'center', false);
     if (ready) light(G.p.x, G.p.y, 0, null);
   } else if (!pl) { c.fillStyle = INK; c.fillRect(bx - 1, by - 1, 11, 11); c.drawImage(icon('knife', '#6b6577', '#3a2f3e'), bx, by, 9, 9); }
@@ -859,6 +862,12 @@ function drawCoopPanels(c) {
       }
     } else if (ch.hpMode === 'anxiety') { bar(c, hx, hy + 1, bw, 5, p.hp / 100, p.hp > 70 ? '#ff4a8a' : '#7a3aa0'); txt(c, 'ANSIA', hx + bw - 26, hy + 7, '#d08aff', 8); }
     else bar(c, hx, hy + 1, bw, 5, p.hp / p.maxHp, '#c41e2a', null, 'hp' + i);
+    // risorsa del personaggio in una riga sottile
+    if (!pl.down) {
+      const ry = hy + 8;
+      const res = { knight: [p.soul / 99, '#e8ecf2'], penitent: [p.fervour / 100, '#5fb3ff'], terrarian: [p.mana / 100, '#4a7aff'], v1: [(p.stam || 0) / 3, '#7ec8ff'], madeline: [p.charges > 0 ? 1 : (p.recharge || 0) / 0.9, p.charges > 0 ? '#d1343a' : '#5fb3ff'], prisoner: [p.flasks / Math.max(1, p.flaskMax), '#ff6a6a'], isaac: [p.charge / 6, '#ffd23f'], zagreus: [(p.dd || 0) / 3, '#e0303a'] }[ch.id];
+      if (res) bar(c, hx, ry, bw - 2, 2, res[0], res[1]);
+    }
     // armi e supporto in miniatura
     const wy = y + 27;
     for (let k = 0; k < Math.min(6, ch.maxW || 6); k++) { const sx = hx + k * 12; slotBox(c, sx, wy, 10, '#c9a050', !!G.weapons[k]); if (G.weapons[k]) drawWSlot(c, sx, wy, 10, G.weapons[k], true); }

@@ -17,11 +17,11 @@ const PCOL = ['#ff5a6a', '#5fb3ff', '#7aff9a', '#ffd23f'];
 // --- Dispositivi ------------------------------------------------------------------------
 // 'solo' unisce tastiera completa, primo gamepad e touch (giocatore singolo).
 const DEVICES = {
-  solo: { name: 'Tastiera / Pad', up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], ab: ['Space'], ult: ['KeyE'], sw: ['KeyQ'], pad: 0, touch: true, hint: 'WASD/Frecce · SPAZIO abilità · E ultimate · Q cambia arma' },
-  kb1: { name: 'Tastiera A', up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], ab: ['Space'], ult: ['KeyE'], sw: ['KeyQ'], hint: 'WASD · SPAZIO · E ultimate · Q' },
-  kb2: { name: 'Tastiera B', up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], ab: ['Enter', 'ShiftRight'], ult: ['ControlRight', 'Slash'], sw: ['Period'], hint: 'FRECCE · INVIO · CTRL DX ultimate · .' },
-  kb3: { name: 'Tastiera C', up: ['KeyI'], down: ['KeyK'], left: ['KeyJ'], right: ['KeyL'], ab: ['KeyU'], ult: ['KeyO'], sw: ['KeyY'], hint: 'IJKL · U · O ultimate · Y' },
-  kb4: { name: 'Tastierino', up: ['Numpad8'], down: ['Numpad5'], left: ['Numpad4'], right: ['Numpad6'], ab: ['Numpad0'], ult: ['NumpadEnter'], sw: ['NumpadDecimal'], hint: 'TASTIERINO 8456 · 0 · INVIO ultimate · ,' },
+  solo: { ult1: 'E', name: 'Tastiera / Pad', up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], ab: ['Space'], ult: ['KeyE'], sw: ['KeyQ'], pad: 0, touch: true, hint: 'WASD/Frecce · SPAZIO abilità · E ultimate · Q cambia arma' },
+  kb1: { ult1: 'E', name: 'Tastiera A', up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], ab: ['Space'], ult: ['KeyE'], sw: ['KeyQ'], hint: 'WASD · SPAZIO · E ultimate · Q' },
+  kb2: { ult1: '/', name: 'Tastiera B', up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], ab: ['Enter', 'Period'], ult: ['Slash', 'Minus'], sw: ['Quote', 'Backslash'], hint: 'FRECCE · INVIO o . abilità · / o - ultimate · \' cambia arma' },
+  kb3: { ult1: 'O', name: 'Tastiera C', up: ['KeyI'], down: ['KeyK'], left: ['KeyJ'], right: ['KeyL'], ab: ['KeyU'], ult: ['KeyO'], sw: ['KeyY'], hint: 'IJKL · U · O ultimate · Y' },
+  kb4: { ult1: '↵', name: 'Tastierino', up: ['Numpad8'], down: ['Numpad5'], left: ['Numpad4'], right: ['Numpad6'], ab: ['Numpad0'], ult: ['NumpadEnter'], sw: ['NumpadDecimal'], hint: 'TASTIERINO 8456 · 0 · INVIO ultimate · ,' },
   pad0: { name: 'Gamepad 1', pad: 0, hint: 'Stick · A abilità · Y ultimate · X cambia arma' },
   pad1: { name: 'Gamepad 2', pad: 1, hint: 'Stick · A · Y ultimate · X' },
   pad2: { name: 'Gamepad 3', pad: 2, hint: 'Stick · A · Y ultimate · X' },
@@ -31,7 +31,9 @@ const DEVICES = {
 const PADS = [0, 1, 2, 3].map(() => ({ x: 0, y: 0, a: false, aEdge: false, yb: false, ybEdge: false, xb: false, xbEdge: false, start: false, startEdge: false, b: false, bEdge: false, l: false, lEdge: false, r: false, rEdge: false, u: false, uEdge: false, d: false, dEdge: false, on: false, prev: {} }));
 function pollPads() {
   const list = navigator.getGamepads ? [...navigator.getGamepads()] : [];
-  const real = list.filter(Boolean);
+  // co-op: ogni gamepad resta legato al suo indice (se uno si scollega, gli altri non cambiano eroe)
+  const real = [0, 1, 2, 3].map(i => list[i] || null);
+  if (!real[0]) real[0] = list.find(Boolean) || null;
   const dz = v => (Math.abs(v) < 0.22 ? 0 : v);
   PADS.forEach((P, i) => {
     const gp = real[i];
@@ -81,7 +83,8 @@ function makeSlot(idx, charId, dev) {
     moonT: 0, moonDone: false, order: 0, barkLowT: 0, bark: null, stepT: 0, hitT: 99, dmgBuffT: 0, dmgBuff: 1, auraSlow: null, dmgTakenMul: 1, silenced: false,
   };
 }
-function savePl(pl) { if (!pl) return; for (const k of PKEYS) pl[k] = G[k]; }
+// l'oggetto p di uno slot non cambia mai: non lo salvo, così un G.p temporaneo non può "sporcare" lo slot
+function savePl(pl) { if (!pl) return; for (const k of PKEYS) if (k !== 'p') pl[k] = G[k]; }
 function loadPl(pl) { for (const k of PKEYS) G[k] = pl[k]; G.cur = pl; }
 function usePl(pl) { if (G.cur === pl) return; if (G.cur) savePl(G.cur); loadPl(pl); }
 function withPl(pl, fn) {
@@ -103,6 +106,14 @@ function nearestPl(x, y, alive = true) {
   return best || G.players[0];
 }
 // Esegue fn nel contesto di ogni giocatore vivo che soddisfa test(p)
+// setTimeout che ricorda di chi era il colpo (danno, statistiche e crediti al giocatore giusto)
+function later(fn, ms) {
+  const g = G, me = G && G.cur;
+  setTimeout(() => {
+    if (!G || G !== g || G.over) return;
+    if (me && G.players) { if (me.down) return; withPl(me, fn); } else fn();
+  }, ms);
+}
 function forPls(fn, test) {
   const prev = G.cur;
   for (const pl of G.players) {
@@ -123,7 +134,9 @@ function downPlayer() {
     return;
   }
   if (!coop()) { endRun(false); return; }
-  pl.down = true; pl.reviveK = 0; p.hp = 0; p.dash = null; p.ultA = null;
+  pl.down = true; pl.reviveK = 0; p.hp = 0; p.dash = null;
+  if (p.ultA) { ULTS[p.ultA.id].end?.(p.ultA, p); p.ultA = null; }
+  p.headless = false;
   fxParticles(p.x, p.y, pl.col, 30, 120, 0.8, 2); shake(6); sfx('boom');
   if (!alivePls().length) { endRun(false); return; }
   banner(pl.label + ' È A TERRA', 'Stagli vicino per ricucirlo', 2.2, pl.col);
@@ -146,19 +159,19 @@ function updateSquad(dt) {
   // lo schermo è uno solo: i giocatori non possono allontanarsi troppo
   const live = alivePls();
   if (live.length < 2) return;
-  const MW = W - 64, MH = H - 96;
+  const MW = W - 64, MH = H - 150;
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const pl of live) { x0 = Math.min(x0, pl.p.x); x1 = Math.max(x1, pl.p.x); y0 = Math.min(y0, pl.p.y); y1 = Math.max(y1, pl.p.y); }
   if (x1 - x0 > MW) { const c = (x0 + x1) / 2; for (const pl of live) pl.p.x = clamp(pl.p.x, c - MW / 2, c + MW / 2); }
   if (y1 - y0 > MH) { const c = (y0 + y1) / 2; for (const pl of live) pl.p.y = clamp(pl.p.y, c - MH / 2, c + MH / 2); }
   // i giocatori a terra seguono il gruppo (vengono trascinati ai bordi)
-  for (const pl of G.players) if (pl.down) { pl.p.x = clamp(pl.p.x, G.center.x - W / 2 + 20, G.center.x + W / 2 - 20); pl.p.y = clamp(pl.p.y, G.center.y - H / 2 + 24, G.center.y + H / 2 - 30); }
+  for (const pl of G.players) if (pl.down) { pl.p.x = clamp(pl.p.x, G.center.x - W / 2 + 24, G.center.x + W / 2 - 24); pl.p.y = clamp(pl.p.y, G.center.y - H / 2 + 70, G.center.y + H / 2 - 90); }
 }
 function updateCenter() {
   const live = alivePls().length ? alivePls() : G.players;
   // centro del riquadro che contiene tutti (non la media): così nessuno esce dallo schermo
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const pl of live) { x0 = Math.min(x0, pl.p.x); x1 = Math.max(x1, pl.p.x); y0 = Math.min(y0, pl.p.y); y1 = Math.max(y1, pl.p.y); }
-  G.center = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + (live.length > 1 ? 8 : 0), mx: 0, my: 0 };
+  G.center = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + (live.length > 1 ? 10 : 0), mx: 0, my: 0 };
   if (live.length === 1) { G.center.mx = live[0].p.mx; G.center.my = live[0].p.my; G.center.moving = live[0].p.moving; }
 }

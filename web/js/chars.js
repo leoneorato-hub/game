@@ -183,7 +183,7 @@ const WEAPONS = {
       addSoul(-33);
       const dmg = 30 * 2.0 * lvMul(w, 0.15);
       aoe(p.x, p.y, r, dmg, { kb: 220, stun: w.lvl >= 5 ? 1 : 0.5 }, '#f2efe6');
-      if (w.lvl >= 8) setTimeout(() => { if (G && MODE === 'play') aoe(G.p.x, G.p.y, r * 1.4, dmg * 0.5, { kb: 160 }, '#9aa6b8'); }, 200);
+      if (w.lvl >= 8) later(() => { if (MODE === 'play') aoe(G.p.x, G.p.y, r * 1.4, dmg * 0.5, { kb: 160 }, '#9aa6b8'); }, 200);
       fxParticles(p.x, p.y, '#f2efe6', 16, 120, 0.4);
       p.jumpT = 0.25; shake(4); sfx('boom');
       setCd(w, 1.6);
@@ -370,7 +370,7 @@ const WEAPONS = {
     update(w, dt) {
       if (!tick(w, dt)) return;
       const p = G.p;
-      const list = enemiesIn(p.x, p.y, 220).filter(e => !e.boss && !e.pull && d2(e.x, e.y, p.x, p.y) > 50 * 50).sort((a, b) => b.hp - a.hp);
+      const list = foesIn(p.x, p.y, 220).filter(e => !e.boss && !e.pull && d2(e.x, e.y, p.x, p.y) > 50 * 50).sort((a, b) => b.hp - a.hp);
       if (!list.length) { w.t = 0.3; return; }
       const n = 1 + (w.lvl >= 4 ? 1 : 0) + (w.lvl >= 7 ? 1 : 0);
       const dmg = 22 * lvMul(w, 0.2);
@@ -499,7 +499,7 @@ const WEAPONS = {
           const p = G.p;
           p.invuln = Math.max(p.invuln, 1.1); p.flyHigh = 0.9;
           fxText(p.x, p.y - 20, 'INSIEME!', '#ff7ad9', 1, true);
-          { const me = G.p, ar = G.s.area; setTimeout(() => { if (G && !G.over) { aoe(me.x, me.y, 110 * ar, 70 * lvMul(w, 0.15), { kb: 300, src: 'badeline' }, '#ff7ad9'); shake(6); sfx('boom'); } }, 850); }
+          { const me = G.p, ar = G.s.area; later(() => { { aoe(me.x, me.y, 110 * ar, 70 * lvMul(w, 0.15), { kb: 300, src: 'badeline' }, '#ff7ad9'); shake(6); sfx('boom'); } }, 850); }
         }
       }
     },
@@ -755,16 +755,16 @@ const WEAPONS = {
     update(w, dt) {
       if (!prayerReady(w)) return;
       const p = G.p;
-      const list = enemiesIn(p.x, p.y, 220);
+      const list = foesIn(p.x, p.y, 220);
       if (list.length < 3) return;
       castPrayer(w);
       const n = 4 + (w.lvl >= 3) + (w.lvl >= 6) + (w.lvl >= 8 ? 2 : 0);
       const dmg = 45 * lvMul(w, 0.15);
       for (let i = 0; i < n; i++) {
         const t = pick(list);
-        setTimeout(() => { if (!G || G.over || t.dead) return; fxBolt(t.x + rnd(-10, 10), t.y - 160, t.x, t.y, '#ffffff', 0.18); aoe(t.x, t.y, 16, dmg, { stun: 0.3, src: 'taranto' }, '#bfe4ff'); }, i * 80);
+        later(() => { if (t.dead) return; fxBolt(t.x + rnd(-10, 10), t.y - 160, t.x, t.y, '#ffffff', 0.18); aoe(t.x, t.y, 16, dmg, { stun: 0.3, src: 'taranto' }, '#bfe4ff'); }, i * 80);
       }
-      if (owned('debla')) for (const pl of G.pillars) setTimeout(() => { if (G && !G.over) { fxBolt(pl.x, pl.y - 160, pl.x, pl.y); aoe(pl.x, pl.y, 18, dmg, { src: 'taranto' }, '#fff2b0'); } }, 100);
+      if (owned('debla')) for (const pl of G.pillars) later(() => { { fxBolt(pl.x, pl.y - 160, pl.x, pl.y); aoe(pl.x, pl.y, 18, dmg, { src: 'taranto' }, '#fff2b0'); } }, 100);
     },
   },
   debla: {
@@ -850,7 +850,7 @@ const WEAPONS = {
     update(w, dt) {
       if (!tick(w, dt)) return;
       const p = G.p;
-      const list = enemiesIn(p.x, p.y, 200);
+      const list = foesIn(p.x, p.y, 200);
       if (!list.length) { w.t = 0.2; return; }
       const n = 1 + Math.floor(w.lvl / 3);
       for (let i = 0; i < n; i++) {
@@ -999,7 +999,7 @@ function zenithUpdate(w, dt) {
   const e = nearest(p.x, p.y, 260);
   if (!e) { w.t = 0.1; return; }
   if (w.swords.length < 7) {
-    const list = enemiesIn(p.x, p.y, 260);
+    const list = foesIn(p.x, p.y, 260);
     const tg = pick(list) || e;
     w.swords.push({ tg, ex: tg.x, ey: tg.y, t: 0, dur: 0.55, cx: rnd(-80, 80), cy: rnd(-80, 80), x: p.x, y: p.y, hit: new Set(), col: TIERS[Math.floor(rnd(8))].c });
   }

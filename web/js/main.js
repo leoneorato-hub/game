@@ -22,6 +22,7 @@ addEventListener('keydown', e => {
   if (!e.repeat) INPUT.pressed[e.code] = true;
   INPUT.keys[e.code] = true;
   if (MODE === 'dialog') {
+    delete INPUT.pressed[e.code];
     if (DLG_KEYS.includes(e.code)) { if (!e.repeat) advanceDialog(); e.preventDefault(); }
     if (e.code === 'Escape') { DLG.i = DLG.lines.length - 1; DLG.shown = DLG.text.length; advanceDialog(); e.preventDefault(); }
     return;
@@ -38,6 +39,7 @@ addEventListener('keydown', e => {
     const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code];
     if (n !== undefined) { document.querySelectorAll('#ch-cards .lv-card')[n]?.click(); e.preventDefault(); return; }
   }
+  if ((MODE === 'levelup' || MODE === 'choice') && e.repeat) { e.preventDefault(); return; }
   if (MODE === 'levelup') {
     const n = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
     if (n !== undefined) { UI.choose(n); e.preventDefault(); return; }
@@ -105,7 +107,7 @@ function padMenus() {
   for (let i = 0; i < 4; i++) {
     const P = PADS[i];
     if (!P.on) continue;
-    if (MODE === 'dialog') { if (P.aEdge) advanceDialog(); continue; }
+    if (MODE === 'dialog') { if (P.aEdge) { advanceDialog(); P.aEdge = false; P.ybEdge = false; } continue; }
     if (MODE === 'play') { if (P.startEdge) UI.openPause(); continue; }
     if (MODE === 'panic' || MODE === 'cine') continue;
     if (UI.current === 's-lobby') { UI.lobbyPad(i, P); continue; }
@@ -253,6 +255,7 @@ function update(dt) {
     if (pl.down) { pl.in = readInput(pl); continue; }
     usePl(pl);
     updatePlayer(pl, dt);
+    for (const z of G.zones) if (!z.pl) z.pl = pl;
   }
   usePl(leadPl());
   updateSquad(dt);
@@ -263,7 +266,7 @@ function update(dt) {
   updateEProjs(dt);
   for (const z of G.zones) {
     z.t -= dt;
-    if (z.type === 'fire') { z.k -= dt; if (z.k <= 0) { z.k = 0.3; for (const e of enemiesIn(z.x, z.y, z.r)) hurtEnemy(e, z.dmg, { silent: true, src: z.src, burn: z.dmg * 0.5 }); } }
+    if (z.type === 'fire') { z.k -= dt; if (z.k <= 0) { z.k = 0.3; const hit = () => { for (const e of enemiesIn(z.x, z.y, z.r)) hurtEnemy(e, z.dmg, { silent: true, src: z.src, burn: z.dmg * 0.5 }); }; if (coop() && z.pl && z.pl !== G.cur) withPl(z.pl, hit); else hit(); } }
   }
   G.zones = G.zones.filter(z => z.t > 0);
   updateBlocks(dt);
@@ -302,6 +305,7 @@ function update(dt) {
     shake(8); sfx('evo'); G.flashW = 0.8; G.hitStop = 0.4;
     for (const e of G.enemies) if (!e.boss && !e.prop) { e.dead = true; e.noXp = true; fxParticles(e.x, e.y, e.blood || '#fff', 3, 40, 0.3); }
     G.eprojs = []; G.teles = [];
+    if (G.contE) { G.contE.dead = true; G.contE = null; }
     // tutti i giocatori a terra si rialzano
     for (const pl of G.players) if (pl.down) { pl.down = false; withPl(pl, () => { G.p.hp = G.char.hpMode === 'anxiety' ? 30 : Math.max(1, Math.ceil(G.p.maxHp * 0.4)); G.p.invuln = 2; }); }
     if (G.mode === 'endless') for (let i = 0; i < 3; i++) dropPickup(i ? 'pk_purse' : 'chest', G.bossE.x + (i - 1) * 16, G.bossE.y);
@@ -452,7 +456,7 @@ function updatePanic(dt) {
       banner('…OK. SONO ANCORA QUI.', p.panicWins === 1 ? 'Ora puoi trovare il passivo Accettazione' : 'Madeline', 2.2, '#ff7ad9');
     } else if (P.prog <= 0 || P.t <= 0) {
       G.panic = null;
-      if (coop()) { MODE = 'play'; downPlayer(); }
+      if (coop() || G.p.revives > 0) { MODE = 'play'; downPlayer(); }
       else endRun(false, 'panic');
     }
   });
