@@ -6,6 +6,9 @@
 // risoluzione nativa dei riferimenti; i fotogrammi d'animazione si ottengono
 // modificando le righe (gambe, respiro, occhi). Contorno di 1 px automatico.
 // Frame: _i0 _i1 _bl _w0.._w3 _hu · SPR[nome] = SPR[nome+'_i0'] · HERO_META.
+// Revisione: gambe del Cavaliere leggibili (3 righe, orlo staccato, gamba vicina
+// con filo di luce), manina pulita; Badeline senza zaino e con i capelli che
+// fluttuano verso l'alto (come in Celeste).
 // =============================================================================
 (() => {
   const META = (window.HERO_META = window.HERO_META || {});
@@ -88,6 +91,7 @@
     b: '#0b0a10', // Vuoto: gambe, pieghe del mantello
     c: '#646d8c', C: '#4b5270', n: '#1d2234', k: '#272832', // mantello
     h: '#16141e', H: '#3d3a4c', // manina che spunta
+    L: '#0b0a10', q: '#3d4058', // gambe del Vuoto (nere, senza contorno) + filo di luce sulla gamba vicina
   };
   // riferimento ripulito (senza chiodo né firma), 20 colonne
   const KN_UP = [
@@ -118,7 +122,7 @@
     '...bCbcccbccbcCb....',
     '...bbCCccbccbccb....',
     '..bnnCCcbccbcbcb....',
-    '..bnnnCbcccbcbccbh..',
+    '..bnnnCbcccbcbccb...',
     '.bnnnbbccccbcbccbHh.',
     '.bbbbCCCCcbcbkbCbhh.',
     '.bnnnnCCCcbcbkbbCb..',
@@ -126,24 +130,28 @@
     'bnnnnnCbbccbkkkbnb..',
     'bnnnnbbCCcbbbkkbnb..',
     'bbbbbCCCCbbbbbkbnb..',
-    'bnnnnnnbbbbbbbbbb...',
-    '.bbbbbbbbbbbbbbbb...',
+    'bnnnnnnCCbbbkkkbb...',
+    '.bnnnnnnbbnnkkkb....',
   ];
+  // gambe: 3 righe (4 nel passaggio, corpo su di 1). q = filo di luce sulla gamba vicina,
+  // così si capisce quale gamba è avanti nei due contatti.
   const KN_LEGS = {
-    idle: ['.....bbbbb..bbbbb...', '......bbb....bbb....'],
-    // contatto: passo lungo (gamba davanti avanti, dietro indietro)
-    c0: ['....bbbb....bbbb....', '..bbbb.......bbbb...'],
-    c1: ['....bbbbb..bbbb.....', '...bbbb.....bbbb....'],
-    // passaggio (corpo su di 1): una gamba a terra, l'altra sollevata
-    p0: ['.....bbbbbbbbbb.....', '.....bbb...bbbb.....', '...........bbb......'],
-    p1: ['.....bbbbbbbbbb.....', '.....bbbb...bbb.....', '......bbb...........'],
+    idle: ['......qLL....LLL....', '......qLL....LLL....', '......qLLL...LLLL...'],
+    // contatto A: gamba vicina avanti, lontana indietro
+    c0: ['......LLL..qLL......', '.....LLL....qLL.....', '....LLLL.....qLLL...'],
+    // contatto B: gamba lontana avanti, vicina indietro
+    c1: ['......qLL..LLL......', '.....qLL....LLL.....', '....qLLL.....LLLL...'],
+    // passaggio A: vicina a terra sotto il corpo, lontana sollevata dietro
+    p0: ['.....LLL.qLL........', '.....LLL..qLL.......', '......LL..qLL.......', '..........qLLL......'],
+    // passaggio B: lontana a terra, vicina sollevata dietro
+    p1: ['.....qLL.LLL........', '.....qLL..LLL.......', '......qL..LLL.......', '..........LLLL......'],
   };
   function knFrame(legs, o = {}) {
     const G = blank(24, 41);
     const up = toG(KN_UP);
     const lift = o.lift || 0;
-    stamp(G, up, 2 + (o.dx || 0), 2 - lift);
-    stamp(G, legs, 2, 2 + 37 - lift);
+    stamp(G, up, 2 + (o.dx || 0), 1 - lift);
+    stamp(G, legs, 2, 1 + 37 - lift);
     return G;
   }
   const KN_EYES = (G, oy, closed, dx = 0) => {
@@ -162,15 +170,15 @@
   {
     const L = KN_LEGS, F = {};
     F._i0 = knFrame(L.idle);
-    F._i1 = squash(F._i0, 2 + 29);
-    F._bl = KN_EYES(clone(F._i0), 0, 'blink');
-    F._w0 = flare(knFrame(L.c0), 31, 38, 7);
-    F._w1 = flare(knFrame(L.p0, { lift: 1 }), 33, 37, 6);
-    F._w2 = flare(knFrame(L.c1), 31, 38, 7);
-    F._w3 = flare(knFrame(L.p1, { lift: 1 }), 33, 37, 6);
+    F._i1 = squash(F._i0, 1 + 29);
+    F._bl = KN_EYES(clone(F._i0), -1, 'blink');
+    F._w0 = flare(knFrame(L.c0), 30, 38, 7);
+    F._w1 = flare(knFrame(L.p0, { lift: 1 }), 32, 37, 6);
+    F._w2 = flare(knFrame(L.c1), 30, 38, 7);
+    F._w3 = flare(knFrame(L.p1, { lift: 1 }), 32, 37, 6);
     // colpito: testa e mantello arretrano di 1 px e si schiacciano, occhi strizzati
-    F._hu = KN_EYES(squash(moveRows(F._i0, 0, 2 + 35, -1, 0), 2 + 28), 1, 'hurt', -1);
-    regHero('knight', F, KN_PAL, '#1a1220', 'Kb', { hand: [20, 30], head: [12, 2] });
+    F._hu = KN_EYES(squash(moveRows(F._i0, 0, 1 + 37, -1, 0), 1 + 28), 0, 'hurt', -1);
+    regHero('knight', F, KN_PAL, '#1a1220', 'KbLq', { hand: [20, 29], head: [12, 1] });
   }
 
   // =================================================================================
@@ -276,10 +284,10 @@
     o: '#301234', p: '#4c1c55', t: '#6fc0bc', T: '#486397', s: '#fcc7a2', S: '#d2606c', B: '#7e3e3e',
     R: '#f25656', r: '#a11942', H: '#fcc7a2', e: '#4c1c55', E: '#4c1c55', m: '#a11942',
   };
-  function mdFrame(legs, o = {}) {
+  function mdFrame(legs, o = {}, up = MD_UP, upY = 2) {
     const G = blank(28, 46);
     const lift = o.lift || 0;
-    stamp(G, MD_UP, 0, 2 - lift);
+    stamp(G, up, 0, upY - lift);
     stamp(G, legs, 0, 38 - lift);
     return G;
   }
@@ -294,15 +302,15 @@
     }
     return G;
   }
-  function madelineFrames() {
+  function madelineFrames(up = MD_UP, upY = 2, upB = up) {
     const L = MD_LEGS, F = {};
-    F._i0 = mdFrame(L.idle);
-    F._i1 = squash(F._i0, 29);
+    F._i0 = mdFrame(L.idle, {}, up, upY);
+    F._i1 = squash(mdFrame(L.idle, {}, upB, upY), 29);
     F._bl = mdEyes(clone(F._i0), 'blink');
-    F._w0 = mdFrame(L.c0);
-    F._w1 = mdFrame(L.p0, { lift: 1 });
-    F._w2 = mdFrame(L.c1);
-    F._w3 = mdFrame(L.p1, { lift: 1 });
+    F._w0 = mdFrame(L.c0, {}, up, upY);
+    F._w1 = mdFrame(L.p0, { lift: 1 }, upB, upY);
+    F._w2 = mdFrame(L.c1, {}, up, upY);
+    F._w3 = mdFrame(L.p1, { lift: 1 }, upB, upY);
     F._hu = mdEyes(squash(moveRows(F._i0, 0, 36, -1, 0), 26), 'hurt', -1, 1);
     return F;
   }
@@ -311,13 +319,54 @@
   regHero('madeline', MD_F, MD_PAL, '#301234', 'o', MD_META);
   regHero('madeline_blue', MD_F, Object.assign({}, MD_PAL, { R: '#5fb3ff', r: '#2c64c8', H: '#c4ecff' }), '#301234', 'o', MD_META);
   regHero('madeline_pink', MD_F, Object.assign({}, MD_PAL, { R: '#ff7ad9', r: '#b8329a', H: '#ffd2f2' }), '#301234', 'o', MD_META);
-  // BADELINE — il riflesso: capelli viola, pelle lavanda pallida, giacca viola, pantaloni
-  // e stivali quasi neri,
-  // occhi rossi che brillano
-  regHero('badeline', MD_F, {
-    o: '#1a0b22', p: '#231a2c', t: '#5b3886', T: '#3a2160', s: '#e4d0f2', S: '#a585c6', B: '#3d2552',
+  // BADELINE — il riflesso. Come in Celeste: niente zaino (stessa sagoma di Madeline ma
+  // senza zaino, braccio sinistro libero), capelli viola che FLUTTUANO verso l'alto/dietro
+  // in ciocche che ondeggiano (variante B nei fotogrammi di respiro e di passaggio), pelle
+  // lavanda pallida, giacca viola, pantaloni e stivali quasi neri, occhi rossi che brillano.
+  // Griglia di 38 righe (2 in più in cima per le ciocche), stampata a y = 0.
+  const BD_LEFT = { // colonne 0-12 delle righe di MD_UP 15-35: via lo zaino, spalla e fianco
+    15: '.....orrrrroS', 16: '....oooooooor',
+    17: '.....ottttToo', 18: '....otTtttTop', 19: '....otttttTop', 20: '....oTtttTtpo',
+    21: '....otttttTpp', 22: '....ottTTtTop', 23: '....otttttoop', 24: '...oTTtTttToo',
+    25: '...ottttttTss', 26: '...ottttttpss', 27: '...oTttttTpss', 28: '...oooooooooo',
+    29: '......oppppTt', 30: '......otppppp', 31: '......otTTttt', 32: '......otTTttt',
+    33: '......ooooooo', 34: '........opppp', 35: '........opppp',
+  };
+  const BD_TOP_A = [ // righe 0-8 (= MD_UP -2..6): ciocca che sale all'indietro, niente antenna
+    '..ooo.......................',
+    '.oRRRo..oo..................',
+    '.orRRRooRRo.................',
+    '.orrRRRRRRo.................',
+    '..orrRRRRRo.................',
+    '...orrRRRRRoooooooo.........',
+    '....orrRRRRrRRRRrrroo.......',
+    '.....orrRRRRRRRRRrRRro......',
+    '......orrHRRRRRRRRRRRRo.....',
+  ];
+  const BD_TOP_B = [ // le punte ondeggiano: più basse di 1 e piegate in avanti
+    '............................',
+    '...ooo..oo..................',
+    '..oRRRooRRo.................',
+    '.orrRRRRRRo.................',
+    '.orrRRRRRo..................',
+  ];
+  // ciocca bassa dietro la nuca, sollevata
+  const BD_WISP_A = { 9: '..oo', 10: '.oRRo', 11: '.orRRo', 12: '..orRRr', 13: '...orrr' };
+  const BD_WISP_B = { 10: '..oo', 11: '.oRRo', 12: '.orRRRr', 13: '..orrrr' };
+  function bdUp(top, wisp) {
+    const rows = ['.'.repeat(28), '.'.repeat(28)].concat(MD_UP.map((r, i) => (BD_LEFT[i] ? BD_LEFT[i] + r.slice(13) : r)));
+    top.forEach((r, i) => { rows[i] = r; });
+    for (const k in wisp) rows[k] = wisp[k] + rows[k].slice(wisp[k].length);
+    const g = toG(rows);
+    g[28][13] = 'S'; g[28][22] = 's'; // i pugni stringono il nulla (niente spallacci dello zaino)
+    return g;
+  }
+  const BD_A = bdUp(BD_TOP_A, BD_WISP_A);
+  const BD_B = bdUp(BD_TOP_A.map((r, i) => BD_TOP_B[i] || r), BD_WISP_B);
+  regHero('badeline', madelineFrames(BD_A, 0, BD_B), {
+    o: '#1a0b22', p: '#2a1f38', t: '#6c4aa6', T: '#43287a', s: '#e4d0f2', S: '#a585c6', B: '#3d2552',
     R: '#a64ad6', r: '#5c1e88', H: '#e6b0ff', e: '#ff2448', E: '#ffc0ca', m: '#7a2a78',
-  }, '#1a0b22', 'o', MD_META);
+  }, '#1a0b22', 'o', { hand: [23, 28], head: [15, 5] });
 
   // =================================================================================
   // ISAAC — dal riferimento 6.png (pixel ~10.25 px, contorno doppio → qui 1 px).

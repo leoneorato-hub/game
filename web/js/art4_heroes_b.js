@@ -82,8 +82,7 @@
   };
   const POUT = { D: '#4a0c2a', F: '#4a0c2a', L: '#4a0c2a', W: '#4a0c2a', e: null, y: '#4a0c2a', Y: '#4a0c2a', o: '#4a0c2a', u: null, Z: null };
 
-  const FLAME_A = { x: 9, y: 1, rows: [
-    '.....F........',
+  const FLAME_A = { x: 9, y: 3, rows: [
     '......F.......',
     '.....DFF......',
     '....DFLF......',
@@ -99,8 +98,7 @@
     '.DFFLLLLyLFFD.',
     '..DDFFLLFFDD..',
   ] };
-  const FLAME_B = { x: 9, y: 1, rows: [
-    '.......F......',
+  const FLAME_B = { x: 9, y: 3, rows: [
     '......FF......',
     '.....DFL......',
     '....DFLF......',
@@ -151,15 +149,17 @@
     'qqqqkkk.',
     '.kkkkk..',
   ] };
+  // braccio dietro (sotto lo spallaccio): manica azzurra → fascia viola →
+  // avambraccio color pelle con lacci viola → guanto azzurro (come nel riferimento)
   const P_BACKARM = { x: 2, y: 22, rows: [
     '..bb..',
     '..bbc.',
     '.vvv..',
-    '.Bbc..',
-    '.bbc..',
-    'Aag...',
-    'gAa...',
-    '.gg...',
+    '.Aag..',
+    '.gAa..',
+    'Bba...',
+    'bBc...',
+    '.cc...',
   ] };
   const P_FRONTARM = { x: 20, y: 17, rows: [
     '.Bb......',
@@ -167,12 +167,12 @@
     '.bbc.....',
     '.bbc.....',
     '..vvv....',
-    '..vBbb...',
-    '...cBbb..',
-    '....cbbc.',
-    '.....AAa.',
-    '.....aga.',
-    '.....sas.',
+    '..vAAa...',
+    '...gAas..',
+    '....AAgs.',
+    '.....Bbb.',
+    '.....bBc.',
+    '.....cbc.',
   ] };
   const P_LEGS_IDLE = { x: 0, y: 26, rows: [
     '.........Aaaas....aaas..........',
@@ -196,72 +196,44 @@
     '..xbbbbbc.............Bbbbbbbx..',
   ] };
 
-  // gamba a sbuffo generica (per la camminata): 19 righe, fianco → orlo → fasce → stivale
-  const P_LEG = [
-    '..Aaaas....',
-    '.AAaaass...',
-    '.Aagaass...',
-    '.Aaagass...',
-    'AAaaagass..',
-    'Aaaaagass..',
-    'AAaaaagas..',
-    'Aaaaaagass.',
-    'AAaaaaagss.',
-    'Aaaaaaaggs.',
-    'Aaaaaaasgs.',
-    'vggggggggv.',
-    '.vvvvvvvv..',
-    '...rrm.....',
-    '...mmm.....',
-    '...rrm.....',
-    '..Bbbbc....',
-    '..Bbbbbbc..',
-    '.xbbbbbbbc.',
-  ];
-  // stampa righe con uno spostamento per riga: fn(j) -> [dx, dy]
-  function stampF(B, rows, x, y, fn) {
-    for (let j = 0; j < rows.length; j++) { const [dx, dy] = fn(j); stamp(B, { x: x + dx, y: y + j + dy, rows: [rows[j]] }); }
-  }
-  // L = { x, sh (spostamento del piede), lift (piede alzato), up (corpo sollevato, piede a terra) }
-  function stampLeg(B, L) {
-    const sh = L.sh || 0, lift = L.lift || 0, up = L.up || 0;
-    const fx = j => Math.round(sh * Math.min(j, 12) / 12);
-    if (up && !lift) stamp(B, { x: L.x + fx(13), y: 26 + 13 - up, rows: [P_LEG[13]] });
-    stampF(B, P_LEG, L.x, 26, j => {
-      if (lift && j >= 9) return [fx(j) - (j >= 13 ? 1 : 0), -lift - up];
-      return [fx(j), j < 13 ? -up : 0];
-    });
+  // camminata: le due gambe a sbuffo dell'idle, separate, spostate e alzate
+  // (così i pantaloni restano larghi e le gambe restano due anche in moto)
+  const P_LEG_B = { x: 0, y: 26, rows: P_LEGS_IDLE.rows.map(r => r.slice(0, 16)) };
+  const P_LEG_F = { x: 16, y: 26, rows: P_LEGS_IDLE.rows.map(r => r.slice(16)) };
+  // L = { dx, lift }: il piede alzato accorcia la coscia (le prime righe spariscono sotto il busto)
+  function stampLegI(B, part, L) {
+    const dx = L.dx || 0, lift = L.lift || 0;
+    for (let j = lift; j < part.rows.length; j++) stamp(B, { x: part.x + dx, y: part.y + j - lift, rows: [part.rows[j]] });
   }
   const P_WALK = [
-    [{ x: 5, sh: -3 }, { x: 15, sh: 3 }],
-    [{ x: 7, lift: 2, up: 1 }, { x: 15, up: 1 }],
-    [{ x: 6, sh: 2 }, { x: 15, sh: -2 }],
-    [{ x: 7, up: 1 }, { x: 15, lift: 2, up: 1 }],
+    [{ dx: 0 }, { dx: 0 }],
+    [{ dx: 1, lift: 2 }, { dx: 0 }],
+    [{ dx: 2 }, { dx: -2 }],
+    [{ dx: 0 }, { dx: -1, lift: 2 }],
   ];
 
   function prisonerFrame(flame, legs, o) {
     const B = buf(PW, PH);
     const by = o.by || 0, bx = o.bx || 0, fy = by + (o.fy || 0);
     stamp(B, P_BACKARM, Math.max(0, bx) + (o.swing || 0), by);
-    if (Array.isArray(legs)) { stampLeg(B, legs[0]); stampLeg(B, legs[1]); } else stamp(B, legs);
+    if (Array.isArray(legs)) { stampLegI(B, P_LEG_B, legs[0]); stampLegI(B, P_LEG_F, legs[1]); } else stamp(B, legs);
     stamp(B, P_TORSO, bx, by);
     stamp(B, P_PAULDRON, bx, by);
     stamp(B, P_FRONTARM, bx, by);
     if (flame) {
       const map = o.blink ? { y: 'L', Y: 'L', o: 'L' } : null;
       // nel colpo la fiamma viene "spinta" indietro (in cima più che in basso)
-      const tilt = o.hurt ? (j => [-Math.round((14 - j) / 6), j < 3 ? 1 : 0]) : (() => [0, 0]);
+      const tilt = o.hurt ? (j => [-Math.round((flame.rows.length - j) / 6), j < 2 ? 1 : 0]) : (() => [0, 0]);
       for (let j = 0; j < flame.rows.length; j++) { const [dx, dy] = tilt(j); stamp(B, { x: flame.x + dx, y: flame.y + j + dy, rows: [flame.rows[j]] }, bx, fy, map); }
-      if (o.blink) stamp(B, { x: 15, y: 12, rows: ['oyyyo'] }, bx + (o.hurt ? -1 : 0), fy);
-      if (o.spark) stamp(B, o.spark, bx, fy);
+      if (o.blink) stamp(B, { x: 15, y: 13, rows: ['oyyyo'] }, bx + (o.hurt ? -1 : 0), fy);
     } else {
       // collo senza testa: un moncherino che cova una brace
       stamp(B, { x: 12, y: 9, rows: ['....Z.', '...Z..', '....Z.', '...u..', '..EuE.', '.mEEEm', 'mmnnnm'] }, bx, by);
     }
     return bake(B, PPAL, POUT);
   }
-  function prisonerSet(flame, spark) {
-    const f = (legs, o) => prisonerFrame(flame, legs, Object.assign({ spark }, o));
+  function prisonerSet(flame) {
+    const f = (legs, o) => prisonerFrame(flame, legs, o);
     return {
       _i0: f(P_LEGS_IDLE, {}),
       _i1: f(P_LEGS_IDLE, { by: 1 }),
@@ -273,173 +245,190 @@
       _hu: f(P_LEGS_IDLE, { by: 1, blink: 1, hurt: 1 }),
     };
   }
-  regHero('prisoner', prisonerSet(FLAME_A, { x: 19, y: 3, rows: ['e'] }));
-  regHero('prisoner_f2', prisonerSet(FLAME_B, { x: 11, y: 5, rows: ['e'] }));
+  regHero('prisoner', prisonerSet(FLAME_A));
+  regHero('prisoner_f2', prisonerSet(FLAME_B));
   regHero('prisoner_headless', prisonerSet(null));
-  const PMETA = { hand: [26, 26], head: [14, 1], glow: '#e8608f' };
+  const PMETA = { hand: [26, 26], head: [15, 3], glow: '#e8608f' };
   HERO_META.prisoner = PMETA; HERO_META.prisoner_f2 = PMETA;
   HERO_META.prisoner_headless = { hand: [26, 26], head: [15, 12], glow: '#ff9a4a' };
 
   // l'Omuncolo: solo la testa-fiamma che vola
   {
-    const B = buf(16, 18);
-    stamp(B, FLAME_A, -8, 1);
-    stamp(B, { x: 1, y: 13, rows: ['e....', '.e...'] });
+    const B = buf(16, 16);
+    stamp(B, FLAME_A, -8, -2);
     regSprite('homunculus', bake(B, PPAL, POUT));
   }
 
   // ===========================================================================
   // IL PENITENTE (Blasphemous) — 30×46 (il capirote lo rende alto)
+  // Capirote d'acciaio avvolto da tre giri di spine, maschera con due fori per
+  // gli occhi e una fessura per la bocca, corazza argentata, spallaccio sulla
+  // spalla davanti, panno chiaro che scende dalla spalla dietro, cintura di
+  // cuoio con cingolo rosso a cordoni, pantaloni viola a sbuffo, ginocchiere e
+  // schinieri (riferimento dell'utente 5.png, senza la spada).
   // ===========================================================================
   const NW = 30, NH = 46;
   const NPAL = {
-    // acciaio verdastro (6 toni) + spine nere
-    0: '#121e1e', 1: '#1e3636', 2: '#364e4e', 3: '#5a7272', 4: '#8aa2a2', 5: '#a9c1bd', 6: '#eaf6ea', X: '#0c1414',
+    // acciaio verdastro (6 toni) + spine
+    0: '#101a1c', 1: '#1e3236', 2: '#34494c', 3: '#587070', 4: '#88a29f', 5: '#b2c9c2', 6: '#eef8ee', X: '#0a1012', T: '#6f8c88',
     // stoffa viola/vinaccia
-    k: '#24121c', p: '#361e2a', m: '#5c2842', M: '#774468', L: '#a3709a',
-    // gambe vinaccia
-    v: '#8e3a52',
+    k: '#24121c', p: '#3a1f30', m: '#5c2842', M: '#7c4670', L: '#a5719b',
+    // stinchi/stivali vinaccia
+    V: '#a04a5c', v: '#7a3046', u: '#4e1c2c',
     // cingolo rosso
-    R: '#e3242a', r: '#b0141e', d: '#5e0c18',
+    R: '#e02a30', r: '#a8161f', d: '#5a0c18',
     // panno chiaro sulla spalla
-    C: '#e6dacf', c: '#c3b5aa', w: '#958787', W: '#5e4b4e',
-    // cuoio arancio (guanti, piedi) e cintura
-    O: '#f2946a', o: '#d26a4a', b: '#8a3a32', n: '#4a2c24',
+    C: '#ece0d2', c: '#c8b8aa', w: '#978684', W: '#5e4b4e',
+    // cuoio arancio (guanti, punte dei piedi) e cintura
+    O: '#f2946a', o: '#cf6646', b: '#8a3a32', n: '#4a2a24',
   };
-  const NOUT = { X: null };
-  const N_SPIRE = { x: 14, y: 1, rows: [
-    '..5....',
-    '..42...',
-    '..42...',
-    '..51...',
-    '.X02...',
-    '..431..',
-    '..531..',
-    '..400X.',
-    '.4531..',
-    'X0032..',
-    '.45321.',
-    '.443000X',
-    '2453321',
+  const NOUT = { X: null, T: null };
+  // capirote: tre spire di spine che salgono a destra; le punte (T) sporgono
+  // dalla sagoma senza contorno, come nel riferimento
+  const N_SPIRE = { x: 9, y: 3, rows: [
+    '.......5....',
+    '......54....',
+    '......40T...',
+    '.....T042...',
+    '......532...',
+    '......432...',
+    '.....5400T..',
+    '....T0032...',
+    '.....54321..',
+    '....554321T.',
+    '....5432000T',
+    '..T00003221.',
   ] };
-  const N_HEAD = { x: 11, y: 14, rows: [
-    'X10201020X',
-    '.11234431.',
-    '.11230401.',
-    '.11234431.',
-    '.01233021.',
-    '..012221..',
+  // elmo-maschera scuro: due fori per gli occhi e la fessura della bocca
+  const N_HEAD = { x: 10, y: 15, rows: [
+    'T0122333210T',
+    '.0123344431.',
+    '.01233X44X1.',
+    '.01234X33X1.',
+    '.0122343031.',
+    '..01222110..',
   ] };
-  const N_CLOTH = { x: 2, y: 17, rows: [
-    '..........cC.',
-    '.......wcCCCc',
-    '....WwcCCCCcw',
-    '.WwwcCCCcww..',
-    'W.WwccCcw....',
-    '...Ww.wW.....',
-  ] };
-  const N_CLOTH2 = { x: 2, y: 17, rows: [
-    '..........cC.',
-    '.......wcCCCc',
-    '..WwwwcCCCCcw',
-    'WwwccCCCcww..',
-    '..WwcCcw.....',
-    '.....W.......',
-  ] };
-  const N_BODY = { x: 10, y: 19, rows: [
-    '...123321...',
-    '.2345665432.',
-    '234566554321',
-    '234555443321',
-    '1n123332210n',
-    '.n10111100n.',
-    '.nn000000nn.',
-    'dRRRRRRRRRRd',
-    'drrRRdRRrrrd',
-    '.dd.RdR.ddd.',
-    '....r.R.....',
-    '....R.r.....',
-    '....d.R.....',
-    '....R.d.....',
-    '....r.R.....',
-  ] };
-  const N_PAULDRON = { x: 19, y: 18, rows: [
-    '..2344.',
-    '.234554',
-    '2345653',
-    '2345543',
-    '.23332.',
-    '..111..',
-  ] };
-  const N_BACKARM = { x: 6, y: 21, rows: [
-    '..pmM',
-    '..pmM',
-    '.pmM.',
-    '.p23.',
-    '.pmM.',
-    'oOOb.',
-    'ooO..',
-    '.bo..',
-  ] };
-  const N_FRONTARM = { x: 21, y: 23, rows: [
-    'mMMp.',
-    'mMMp.',
-    '.234.',
-    '.mMp.',
-    '.mML.',
-    '..OOo',
-    '..ooO',
-    '...bo',
-  ] };
-  const N_LEG = [
-    'LMMMMmp.',
-    'LMMMMmp.',
-    'LMMMmmp.',
-    '.LMMmmp.',
-    '.LMMmmp.',
-    '.LMMmp..',
-    '.LMMmp..',
-    '..MMmp..',
-    '.34541..',
-    '.23431..',
-    '.vMmp...',
-    '.vMmp...',
-    '.vMmp...',
-    '.vMmp...',
-    '.vmmp...',
-    '.23442..',
-    '.oOOOOo.',
-    '.booooOO',
+  // panno attorno al collo che scende dalla spalla dietro
+  const N_CLOTH = [
+    { x: 2, y: 18, rows: [
+      '.........cCC.',
+      '......wcCCCc.',
+      '....wcCCcCCc.',
+      '..WwcCCcwcCw.',
+      '.WwcCcw.Wcw..',
+      'W.wcCw...W...',
+      '..WcW........',
+      '..W..........',
+    ] },
+    { x: 2, y: 18, rows: [
+      '.........cCC.',
+      '.......wcCCc.',
+      '...WwcCCcCCc.',
+      '.WwcCCcwwcCw.',
+      'W.WcCcw..Wc..',
+      '..wcCw....W..',
+      '.WcW.........',
+      '.W...........',
+    ] },
   ];
-  function stampLegN(B, L) {
-    const sh = L.sh || 0, lift = L.lift || 0, up = L.up || 0;
-    const fx = j => Math.round(sh * Math.min(j, 10) / 10);
-    if (up && !lift) stamp(B, { x: L.x + fx(10), y: 27 + 10 - up, rows: [N_LEG[10]] });
-    stampF(B, N_LEG, L.x, 27, j => {
-      if (lift && j >= 7) return [fx(j) - (j >= 10 ? 1 : 0), -lift - up];
-      return [fx(j), j < 10 ? -up : 0];
+  // corazza, cintura di cuoio con fibbia, cingolo rosso e cordoni
+  const N_BODY = { x: 9, y: 20, rows: [
+    '..n23455n...',
+    '.2345666543.',
+    '23456666543.',
+    '234566655431',
+    '123455554321',
+    '.n12333221n.',
+    '.n01111100n.',
+    'nnnnnOonnnnn',
+    'dRRRRRRRRRRd',
+    'drRRRdRrrrrd',
+    '.dd.rRdR.dd.',
+    '....R.r.....',
+    '....r.R.....',
+    '....d.r.....',
+    '....R.d.....',
+    '....r.......',
+  ] };
+  const N_PAULDRON = { x: 19, y: 19, rows: [
+    '..2345.',
+    '.234565',
+    '2345664',
+    '2345543',
+    '.234432',
+    '..1221.',
+  ] };
+  // braccio dietro: manica viola, gomitiera, guanto
+  const N_BACKARM = { x: 5, y: 22, rows: [
+    '...pmM',
+    '..pmM.',
+    '..pmM.',
+    '.p234.',
+    '.pmM..',
+    'oOOb..',
+    'ooOo..',
+    '.bo...',
+  ] };
+  // braccio davanti: esce dallo spallaccio, gomitiera, pugno pronto per l'arma
+  const N_FRONTARM = { x: 21, y: 24, rows: [
+    '.mMMp',
+    '.mMMp',
+    '.2342',
+    '.mMMp',
+    '..mML',
+    '..OOOo',
+    '..oOOb',
+    '...bo.',
+  ] };
+
+  // --- gambe parametriche: anca → ginocchio → caviglia ----------------------
+  const ROWS_THIGH = ['LMMMMmmp', 'LMMMMmmp', 'LMMMMmp', 'LMMMmmp', 'LMMMmp', 'LMMmmp', 'LMMmmp', 'LMMmp', 'LMMmp', 'LMmmp'];
+  const ROWS_KNEE = ['23452', '12321'];
+  const ROWS_SHIN = ['Vvvu', 'Vvvu', 'Vvvu', 'Vvuu'];
+  const FOOT_R = ['2342.', 'uvVOO', 'nbboo'];
+  const flipS = r => r.split('').reverse().join('');
+  const BACKMAP = { L: 'M', M: 'm', m: 'p', p: 'k', V: 'v', v: 'u', u: 'n', 5: '4', 4: '3', 3: '2', O: 'o' };
+  // L = { h, k, a: centri x di anca/ginocchio/caviglia, dir: ±1 piede, lift, back }
+  function stampLegP(B, L, hipY) {
+    const lift = L.lift || 0, map = L.back ? BACKMAP : null;
+    const footY = NH - 3 - lift, shinY = footY - ROWS_SHIN.length, kneeY = shinY - ROWS_KNEE.length;
+    const nT = kneeY - hipY;
+    const put = (row, cx, y) => stamp(B, { x: cx - (row.length >> 1), y, rows: [row] }, 0, 0, map);
+    for (let j = 0; j < nT; j++) {
+      const t = nT > 1 ? j / (nT - 1) : 0;
+      const ti = Math.min(ROWS_THIGH.length - 1, Math.round(j * (ROWS_THIGH.length - 1) / Math.max(1, nT - 1)));
+      put(ROWS_THIGH[ti], Math.round(L.h + (L.k - L.h) * t), hipY + j);
+    }
+    ROWS_KNEE.forEach((r, j) => put(r, L.k, kneeY + j));
+    ROWS_SHIN.forEach((r, j) => put(r, Math.round(L.k + (L.a - L.k) * (j + 1) / ROWS_SHIN.length), shinY + j));
+    FOOT_R.forEach((r, j) => {
+      const row = L.dir < 0 ? flipS(r) : r;
+      stamp(B, { x: L.a - 2 + (L.dir < 0 ? -1 : 0), y: footY + j, rows: [row] }, 0, 0, map);
     });
   }
-  const N_IDLE = [{ x: 8, sh: -4 }, { x: 15, sh: 5 }];
+  const N_IDLE = [{ h: 12, k: 9, a: 8, dir: -1, back: 1 }, { h: 18, k: 21, a: 22, dir: 1 }];
+  // camminata vista di 3/4: contatto a Λ (gamba vicina avanti), passaggio con il
+  // piede alzato, contatto opposto (gamba vicina indietro), passaggio
   const N_WALK = [
-    [{ x: 8, sh: -5 }, { x: 15, sh: 5 }],
-    [{ x: 10, sh: -1, lift: 2, up: 1 }, { x: 14, sh: 1, up: 1 }],
-    [{ x: 10, sh: 2 }, { x: 13, sh: -2 }],
-    [{ x: 10, sh: -1, up: 1 }, { x: 14, sh: 1, lift: 2, up: 1 }],
+    [{ h: 13, k: 10, a: 8, dir: 1, back: 1 }, { h: 17, k: 20, a: 22, dir: 1 }],
+    [{ h: 14, k: 14, a: 13, dir: 1, back: 1, lift: 2 }, { h: 16, k: 16, a: 16, dir: 1 }],
+    [{ h: 15, k: 17, a: 19, dir: 1, back: 1 }, { h: 15, k: 13, a: 11, dir: 1 }],
+    [{ h: 14, k: 14, a: 14, dir: 1, back: 1 }, { h: 16, k: 17, a: 17, dir: 1, lift: 2 }],
   ];
   function penitentFrame(legs, o) {
     const B = buf(NW, NH);
     const by = o.by || 0, bx = o.bx || 0;
     stamp(B, N_BACKARM, bx + (o.swing || 0), by);
-    stampLegN(B, legs[0]); stampLegN(B, legs[1]);
+    for (const L of legs) stampLegP(B, L, 28 + by);
     stamp(B, N_BODY, bx, by);
-    stamp(B, o.wave ? N_CLOTH2 : N_CLOTH, Math.max(0, bx), by);
-    stamp(B, N_PAULDRON, bx, by);
-    stamp(B, N_FRONTARM, bx, by);
-    const hx = bx + (o.hurt ? -1 : 0), hy = by + (o.hurt ? 1 : 0);
-    if (o.hurt) { for (let j = 0; j < N_SPIRE.rows.length; j++) stamp(B, { x: N_SPIRE.x - Math.round((13 - j) / 7), y: N_SPIRE.y + j, rows: [N_SPIRE.rows[j]] }, hx, hy); }
+    stamp(B, N_CLOTH[o.wave ? 1 : 0], Math.max(0, bx), by);
+    const hx = bx + (o.hurt ? -1 : 0), hy = by;
+    // nel colpo il capirote viene spinto all'indietro
+    if (o.hurt) { for (let j = 0; j < N_SPIRE.rows.length; j++) stamp(B, { x: N_SPIRE.x - Math.round((N_SPIRE.rows.length - 1 - j) / 6), y: N_SPIRE.y + j, rows: [N_SPIRE.rows[j]] }, hx, hy); }
     else stamp(B, N_SPIRE, hx, hy);
-    stamp(B, N_HEAD, hx, hy, o.blink ? { 0: '1' } : null);
+    stamp(B, N_HEAD, hx, hy, o.blink ? { X: '3' } : null);
+    stamp(B, N_PAULDRON, bx, by);
+    stamp(B, N_FRONTARM, bx + (o.fswing || 0), by);
     return bake(B, NPAL, NOUT);
   }
   regHero('penitent', {
@@ -452,5 +441,5 @@
     _w3: penitentFrame(N_WALK[3], { by: -1 }),
     _hu: penitentFrame(N_IDLE, { by: 1, bx: -1, hurt: 1, blink: 1 }),
   });
-  HERO_META.penitent = { hand: [24, 29], head: [16, 1] };
+  HERO_META.penitent = { hand: [24, 30], head: [16, 3] };
 })();

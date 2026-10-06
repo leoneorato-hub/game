@@ -21,11 +21,13 @@
   const rgbOf = h => RGB[h] || (RGB[h] = HEX(h));
   // materiali: tutti con la stessa forma (accessi monomorfici nel cuocitore)
   const MAT = (r, o = {}) => ({ r, glow: !!o.glow, base: o.base ?? 1, ol: o.ol || null, ink: o.ink || null, soft: !!o.soft, noOl: !!o.noOl, nocast: !!o.nocast, _rgb: null, _ol: 0 });
-  const N4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
   class Px {
-    constructor(w, h) {
+    // free: lati su cui le forme possono toccare il bordo (di norma resta 1 px per il contorno)
+    constructor(w, h, free = {}) {
       this.w = w; this.h = h; const N = w * h;
+      this.cx0 = free.all || free.left ? 0 : 1; this.cy0 = free.all || free.top ? 0 : 1;
+      this.cx1 = free.all || free.right ? w - 1 : w - 2; this.cy1 = free.all || free.bottom ? h - 1 : h - 2;
       this.sid = new Int32Array(N); this.mt = new Array(N).fill(null); this.tn = new Int8Array(N); this.fx = new Uint8Array(N);
       this.n = 0; this.info = [null];
       this.bx0 = w; this.by0 = h; this.bx1 = -1; this.by1 = -1;
@@ -37,63 +39,70 @@
     fill(x0, y0, x1, y1, f, m, o = {}, rr) {
       const keep = !!o.keep, id = keep ? 0 : (o.same ? this.n : this._new(o));
       const only = o.only ? [].concat(o.only) : null, clip = o.clip || null, tone = o.tone, bias = o.bias || 0;
+      const fixed = tone !== undefined, toneF = typeof tone === 'function';
       const W = this.w, sid = this.sid, mt = this.mt, tn = this.tn, fx = this.fx;
-      const ya = Math.max(0, Math.floor(y0)), yb = Math.min(this.h - 1, Math.ceil(y1)), xa = Math.max(0, Math.floor(x0)), xb = Math.min(W - 1, Math.ceil(x1));
+      const ya = Math.max(this.cy0, Math.floor(y0)), yb = Math.min(this.cy1, Math.ceil(y1)), xa = Math.max(this.cx0, Math.floor(x0)), xb = Math.min(this.cx1, Math.ceil(x1));
       const nr = m ? m.r.length : 0;
       if (!keep && m) this._bb(xa, ya, xb, yb);
       for (let y = ya; y <= yb; y++) {
         let xs = xa, xe = xb;
-        if (rr) { const r = rr(y + 0.5); if (!r) continue; const lo = Math.floor(r[0] - 0.5), hi = Math.ceil(r[1] - 0.5); if (lo > xs) xs = lo; if (hi < xe) xe = hi; }
+        const yc = y + 0.5, row = y * W;
+        if (rr) { const r = rr(yc); if (r === null) continue; const lo = Math.floor(r[0] - 0.5), hi = Math.ceil(r[1] - 0.5); if (lo > xs) xs = lo; if (hi < xe) xe = hi; }
         for (let x = xs; x <= xe; x++) {
-          const i = y * W + x;
-          if (keep && !sid[i]) continue;
-          if (only && !only.includes(mt[i])) continue;
-          const v = f(x + 0.5, y + 0.5);
-          if (v === null || v === undefined || v === false) continue;
-          if (clip && !clip(x, y)) continue;
+          const i = row + x;
+          if (keep && sid[i] === 0) continue;
+          if (only !== null && !only.includes(mt[i])) continue;
+          const v = f(x + 0.5, yc);
+          if (v === null) continue;
+          if (clip !== null && !clip(x, y)) continue;
           if (m === null) { sid[i] = 0; mt[i] = null; continue; }
           if (!keep) sid[i] = id;
           mt[i] = m;
-          if (tone !== undefined) { tn[i] = typeof tone === 'function' ? tone(x, y) : tone; fx[i] = 1; }
-          else { const t = Math.floor(((typeof v === 'number' ? v : 0.5) + bias) * nr); tn[i] = t < 0 ? 0 : t >= nr ? nr - 1 : t; fx[i] = 0; }
+          if (fixed) { tn[i] = toneF ? tone(x, y) : tone; fx[i] = 1; }
+          else { const t = Math.floor((v + bias) * nr); tn[i] = t < 0 ? 0 : t >= nr ? nr - 1 : t; fx[i] = 0; }
         }
       }
       return this;
     }
-    q(m, v) { const n = m.r.length; return clamp(Math.floor(v * n), 0, n - 1); }
     ell(cx, cy, rx, ry, m, o = {}) {
       const rot = o.rot || 0, c = Math.cos(rot), s = Math.sin(rot), R = Math.max(rx, ry) + 1, fl = o.fl ?? 1;
-      const Rx = rot ? R : rx + 1, Ry = rot ? R : ry + 1;
-      return this.fill(cx - Rx, cy - Ry, cx + Rx, cy + Ry, (x, y) => {
+      const Rx = rot ? R : rx + 1, Ry = rot ? R : ry + 1, ov = o.v || null, fixedT = o.tone !== undefined;
+      return this.fill(cx - Rx, cy - Ry, cx + Rx, cy + Ry, rot ? (x, y) => {
         const dx = x - cx, dy = y - cy, u = (dx * c + dy * s) / rx, w = (-dx * s + dy * c) / ry, d = u * u + w * w;
         if (d > 1) return null;
-        if (o.v) return o.v(x, y);
-        if (o.tone !== undefined) return 0.5;
+        if (ov !== null) return ov(x, y);
+        if (fixedT) return 0.5;
         const nx = u * c - w * s, ny = u * s + w * c;
-        return lit(nx * fl, ny * fl, Math.sqrt(Math.max(0, 1 - d)));
+        return lit(nx * fl, ny * fl, Math.sqrt(1 - d));
+      } : (x, y) => {
+        const u = (x - cx) / rx, w = (y - cy) / ry, d = u * u + w * w;
+        if (d > 1) return null;
+        if (ov !== null) return ov(x, y);
+        if (fixedT) return 0.5;
+        return lit(u * fl, w * fl, Math.sqrt(1 - d));
       }, m, o, rot ? undefined : yc => { const w = (yc - cy) / ry; if (w < -1 || w > 1) return null; const hw = rx * Math.sqrt(Math.max(0, 1 - w * w)); return span(cx - hw - 0.01, cx + hw + 0.01); });
     }
     // uovo: semiasse verticale diverso sopra/sotto, si stringe verso il basso
     egg(cx, cy, rx, ryT, ryB, taper, m, o = {}) {
-      const fl = o.fl ?? 1;
+      const fl = o.fl ?? 1, ov = o.v || null, fixedT = o.tone !== undefined;
       return this.fill(cx - rx - 1, cy - ryT - 1, cx + rx + 1, cy + ryB + 1, (x, y) => {
         const dy = y - cy, ry = dy < 0 ? ryT : ryB, rxe = rx * (1 - taper * Math.max(0, dy / ryB));
         const u = (x - cx) / rxe, w = dy / ry, d = u * u + w * w;
         if (d > 1) return null;
-        if (o.v) return o.v(x, y);
-        if (o.tone !== undefined) return 0.5;
-        return lit(u * fl, w * fl, Math.sqrt(Math.max(0, 1 - d)));
+        if (ov !== null) return ov(x, y);
+        if (fixedT) return 0.5;
+        return lit(u * fl, w * fl, Math.sqrt(1 - d));
       }, m, o, yc => { const dy = yc - cy, ry = dy < 0 ? ryT : ryB, w = dy / ry; if (w < -1 || w > 1) return null; const hw = rx * (1 - taper * Math.max(0, dy / ryB)) * Math.sqrt(Math.max(0, 1 - w * w)); return span(cx - hw - 0.01, cx + hw + 0.01); });
     }
     cap(x1, y1, x2, y2, r, m, o = {}) {
-      const r2 = o.r2 ?? r, dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy || 1, Mx = Math.max(r, r2) + 1, fl = o.fl ?? 1;
+      const r2 = o.r2 ?? r, dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy || 1, Mx = Math.max(r, r2) + 1, fl = o.fl ?? 1, ov = o.v || null, fixedT = o.tone !== undefined;
       return this.fill(Math.min(x1, x2) - Mx, Math.min(y1, y2) - Mx, Math.max(x1, x2) + Mx, Math.max(y1, y2) + Mx, (x, y) => {
-        const t = clamp(((x - x1) * dx + (y - y1) * dy) / L, 0, 1);
+        let t = ((x - x1) * dx + (y - y1) * dy) / L; t = t < 0 ? 0 : t > 1 ? 1 : t;
         const px = x - (x1 + dx * t), py = y - (y1 + dy * t), rr = r + (r2 - r) * t, d2 = (px * px + py * py) / (rr * rr);
         if (d2 > 1) return null;
-        if (o.v) return o.v(x, y);
-        if (o.tone !== undefined) return 0.5;
-        return lit(px / rr * fl, py / rr * fl, Math.sqrt(Math.max(0, 1 - d2)));
+        if (ov !== null) return ov(x, y);
+        if (fixedT) return 0.5;
+        return lit(px / rr * fl, py / rr * fl, Math.sqrt(1 - d2));
       }, m, o, yc => {
         const R = Mx - 1;
         let ta = 0, tb = 1;
@@ -118,15 +127,16 @@
         rows[y] = xs;
       }
       const cx = o.cx ?? (X0 + X1) / 2, cy = o.cy ?? (Y0 + Y1) / 2, hw = (X1 - X0) / 2 || 1, hh = (Y1 - Y0) / 2 || 1, fl = o.fl ?? 0.6;
+      const ov = o.v || null, fixedT = o.tone !== undefined;
       return this.fill(X0, Y0, X1, Y1, (x, y) => {
         const xs = rows[y - 0.5];
         if (!xs) return null;
         let c = 0;
         for (let q = 0; q < xs.length; q++) if (xs[q] > x) c++;
         if (!(c & 1)) return null;
-        if (o.v) return o.v(x, y);
-        if (o.tone !== undefined) return 0.5;
-        const u = clamp((x - cx) / hw, -1, 1), w = clamp((y - cy) / hh, -1, 1);
+        if (ov !== null) return ov(x, y);
+        if (fixedT) return 0.5;
+        let u = (x - cx) / hw, w = (y - cy) / hh; u = u < -1 ? -1 : u > 1 ? 1 : u; w = w < -1 ? -1 : w > 1 ? 1 : w;
         return lit(u * fl, w * fl * 0.8, Math.sqrt(Math.max(0.05, 1 - (u * u + w * w) * fl * fl)));
       }, m, o, yc => { const xs = rows[yc - 0.5]; if (!xs || !xs.length) return null; let lo = Infinity, hi = -Infinity; for (let q = 0; q < xs.length; q++) { if (xs[q] < lo) lo = xs[q]; if (xs[q] > hi) hi = xs[q]; } return span(lo - 0.01, hi + 0.01); });
     }
@@ -134,7 +144,7 @@
     // pixel singolo / linea (Bresenham) con tono esplicito
     px(x, y, m, t, o = {}, same) {
       x = Math.floor(x); y = Math.floor(y);
-      if (x < 0 || y < 0 || x >= this.w || y >= this.h) return this;
+      if (x < this.cx0 || y < this.cy0 || x > this.cx1 || y > this.cy1) return this;
       const i = y * this.w + x;
       if (o.keep && !this.sid[i]) return this;
       if (o.only && (Array.isArray(o.only) ? !o.only.includes(this.mt[i]) : o.only !== this.mt[i])) return this;
@@ -159,20 +169,6 @@
     }
     // polilinea
     path(pts, m, t, o = {}) { for (let i = 1; i < pts.length; i++) this.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], m, t, o, i > 1); return this; }
-    // griglia di caratteri -> pixel (map: char -> [mat, tono] | null per cancellare)
-    stamp(x0, y0, rows, map, o = {}) {
-      let first = true;
-      for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) {
-        const ch = rows[y][x];
-        if (ch === '.' || ch === ' ' || !(ch in map)) continue;
-        const v = map[ch];
-        const X = o.flip ? x0 + rows[y].length - 1 - x : x0 + x;
-        if (v === null) { this.px(X, y0 + y, null); continue; }
-        this.px(X, y0 + y, v[0], v[1], o, !first);
-        first = false;
-      }
-      return this;
-    }
     get(x, y) { if (x < 0 || y < 0 || x >= this.w || y >= this.h) return null; return this.mt[y * this.w + x]; }
     // cottura: pulizia orfani, ombre portate, linee interne, nuclei emissivi, contorno
     bake(o = {}) {
@@ -181,21 +177,31 @@
       if (this.bx1 < 0) return c;
       const X0 = Math.max(0, this.bx0 - 1), X1 = Math.min(w - 1, this.bx1 + 1), Y0 = Math.max(0, this.by0 - 1), Y1 = Math.min(h - 1, this.by1 + 1);
       const U = new Uint32Array(id.data.buffer), G = new Uint8Array(w * h), T0 = Int8Array.from(tn);
+      // proprietà per forma in array piatti: linea interna (-1 = no, 9 = nera) e ombra portata
+      const NS = this.n + 1, EDG = new Int8Array(NS), CST = new Uint8Array(NS);
+      for (let k = 1; k < NS; k++) { const e = info[k].edge; EDG[k] = e === undefined || e === false ? -1 : e === true ? 9 : e; CST[k] = info[k].cast ? 1 : 0; }
       // 1) maschera emissiva + pixel orfani (un tono isolato dentro la stessa forma prende il tono dei vicini)
-      for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
-        const i = y * w + x, s = sid[i];
-        if (!s) continue;
+      for (let y = Math.max(1, Y0); y <= Math.min(h - 2, Y1); y++) for (let x = Math.max(1, X0), i = y * w + x; x <= Math.min(w - 2, X1); x++, i++) {
+        const s = sid[i];
+        if (s === 0) continue;
         const m = mt[i];
-        if (!m) continue;
+        if (m === null) continue;
         if (m.glow) { G[i] = 1; continue; }
-        if (fx[i] || x === 0 || y === 0 || x === w - 1 || y === h - 1) continue;
+        if (fx[i] === 1) continue;
         const t0 = T0[i];
-        let same = 0, nb = 0, t1 = -1, c1 = 0, t2 = -1, c2 = 0, j, tj;
-        j = i + w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        j = i - w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        j = i + 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        j = i - 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (tj === t0) same++; else if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        if (nb >= 3 && same === 0) tn[i] = c1 >= c2 ? t1 : t2;
+        if ((sid[i - 1] === s && T0[i - 1] === t0 && mt[i - 1] === m) || (sid[i + 1] === s && T0[i + 1] === t0 && mt[i + 1] === m) ||
+            (sid[i - w] === s && T0[i - w] === t0 && mt[i - w] === m) || (sid[i + w] === s && T0[i + w] === t0 && mt[i + w] === m)) continue;
+        let nb = 0, t1 = -1, c1 = 0, t2 = -1, c2 = 0, j, tj;
+        j = i + w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i - w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i + 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i - 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        if (nb >= 3) tn[i] = c1 >= c2 ? t1 : t2;
+      }
+      // pixel emissivi sul bordo della tela (fuori dal ciclo precedente)
+      for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
+        if (y > 0 && y < h - 1 && x > 0 && x < w - 1) { if (x < X1) x = X1 - 1; continue; }
+        const i = y * w + x, m = mt[i]; if (sid[i] && m && m.glow) G[i] = 1;
       }
       const gAt = (x, y) => x >= 0 && y >= 0 && x < w && y < h && G[y * w + x] === 1;
       const pack = m => m._rgb || (m._rgb = m.r.map(hx => { const v = rgbOf(hx); return (255 << 24 | v[2] << 16 | v[1] << 8 | v[0]) >>> 0; }));
@@ -203,41 +209,42 @@
       const softOf = mm => mm._ol || (mm._ol = pack({ r: [mm.ol || mm.r[0]] })[0]);
       const INKU = pack({ r: [INK] })[0], outline = o.outline !== false;
       // 2) colore: nuclei emissivi, linee interne, ombre portate · contorno d'inchiostro sui vuoti
-      for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
-        const i = y * w + x, s = sid[i], m = s ? mt[i] : null;
-        if (!m) {
+      for (let y = Y0; y <= Y1; y++) for (let x = X0, i = y * w + X0; x <= X1; x++, i++) {
+        const s = sid[i], m = s === 0 ? null : mt[i];
+        if (m === null) {
           if (!outline) continue;
-          if (!((y + 1 < h && sid[i + w]) || (y > 0 && sid[i - w]) || (x + 1 < w && sid[i + 1]) || (x > 0 && sid[i - 1]))) continue;
+          const dn = y + 1 < h && sid[i + w] !== 0, up = y > 0 && sid[i - w] !== 0, rt = x + 1 < w && sid[i + 1] !== 0, lf = x > 0 && sid[i - 1] !== 0;
+          if (!(dn || up || rt || lf)) continue;
           let hard = 0, soft = null, mm;
-          if (y + 1 < h && sid[i + w] && (mm = mt[i + w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (y > 0 && sid[i - w] && (mm = mt[i - w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (x + 1 < w && sid[i + 1] && (mm = mt[i + 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (x > 0 && sid[i - 1] && (mm = mt[i - 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (dn && (mm = mt[i + w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (up && (mm = mt[i - w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (rt && (mm = mt[i + 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
+          if (lf && (mm = mt[i - 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
           if (hard) U[i] = hard; else if (soft) U[i] = softOf(soft);
           continue;
         }
         let t = tn[i];
-        const R = pack(m), L = R.length - 1;
-        if (G[i]) {
-          if (!fx[i]) {
+        const R = m._rgb || pack(m), L = R.length - 1;
+        if (G[i] === 1) {
+          if (fx[i] === 0) {
             let d = 1;
             for (; d < 4; d++) if (!gAt(x, y + d) || !gAt(x, y - d) || !gAt(x + d, y) || !gAt(x - d, y)) break;
             t = m.base + d - 1;
           }
         } else {
-          const edge = info[s].edge;
+          const edge = EDG[s];
           let e = false;
-          if (edge !== undefined && edge !== false) {
+          if (edge >= 0) {
             let s2;
             if (y + 1 < h && (s2 = sid[i + w]) && s2 < s && !G[i + w]) e = true;
             else if (y > 0 && (s2 = sid[i - w]) && s2 < s && !G[i - w]) e = true;
             else if (x + 1 < w && (s2 = sid[i + 1]) && s2 < s && !G[i + 1]) e = true;
             else if (x > 0 && (s2 = sid[i - 1]) && s2 < s && !G[i - 1]) e = true;
-            if (e) t = edge === true ? 0 : Math.min(t, edge);
+            if (e) t = edge === 9 ? 0 : (edge < t ? edge : t);
           }
-          if (!e && !fx[i] && !m.nocast && y > 0) {
-            const up = sid[i - w];
-            if (up > s && info[up].cast && !G[i - w] && t > 0) t--;
+          if (!e && fx[i] === 0 && !m.nocast && y > 0) {
+            const upS = sid[i - w];
+            if (upS > s && CST[upS] === 1 && !G[i - w] && t > 0) t--;
           }
         }
         U[i] = R[t < 0 ? 0 : t > L ? L : t];
@@ -259,9 +266,9 @@
     SPR[name] = o;
     return o;
   }
-  function reg3(id, w, h, draw, only0) {
+  function reg3(id, w, h, draw, only0, free) {
     for (const [suf, k, p2] of only0 ? [['_0', 0, 0]] : [['_0', 0, 0], ['_1', 1, 0], ['_p2', 0, 1]]) {
-      const P = new Px(w, h);
+      const P = new Px(w, h, free);
       draw(P, k, p2);
       regLazy('B_' + id + suf, P.bake());
     }
@@ -590,7 +597,7 @@
         P.px(21, 16, BRUISE, 3, { keep: true }); P.px(19, 43, BRUISE, 3, { keep: true });
         for (const [x, y] of [[28, 66], [33, 68], [18, 62]]) P.px(x, y, SHOE, 1, { keep: true });
       }
-    });
+    }, false, { top: true }); // la gamba entra dall'alto: niente contorno in cima
 
     // ---- l'occhio della Mamma nella fessura della porta
     const WOOD = MAT(['#1e100e', '#3e2218', '#5e3820', '#7e5230', '#9e6e44']);
@@ -626,7 +633,8 @@
         P.line(Math.round((x0 + x1) / 2), 1, Math.round((x0 + x1) / 2), 22, WOOD, 1, { keep: true });
         P.px(x0 + 1.5, 4, WOOD, 4, { keep: true }); P.px(x0 + 1.5, 18, WOOD, 4, { keep: true });
       }
-    }, true); // il gioco usa solo B_momeye_0 (effetto 'img' della Mamma)
+    }, true, { all: true }); // il gioco usa solo B_momeye_0 (effetto 'img' della Mamma)
+    SPR.B_momeye_1 = SPR.B_momeye_p2 = SPR.B_momeye_0; // niente versioni vecchie in giro
   }
 
   // =============================================================================
