@@ -147,7 +147,7 @@ const ETYPES = {
   chimera: { spr: 'chimera', hp: 80, spd: 34, dmg: 14, r: 8, xp: 8, blood: '#8a3a5e', kbRes: 0.6 },
   darner: { spr: 'darner', hp: 520, spd: 32, dmg: 16, r: 9, xp: 30, elite: true, ai: AI.darner, blood: '#6a4c7a', name: 'Il Rammendatore' },
   anchor: { spr: 'spool', hp: 380, spd: 0, dmg: 0, r: 8, xp: 10, ai: AI.anchor, kbRes: 1, init: e => { e.harmless = true; e.anchored = true; e.big = 2; e.noSep = true; } },
-  spola: { hp: 5200, spd: 30, dmg: 22, r: 18, xp: 0, boss: true, ai: null, name: 'Madre Spola, la Tessitrice dei Finali' },
+  spola: { hp: 3000, spd: 30, dmg: 22, r: 18, xp: 0, boss: true, ai: null, name: 'Madre Spola, la Tessitrice dei Finali' },
   // Stage 2
   commuter: { spr: 'commuter', hp: 18, spd: 38, dmg: 8, r: 5, xp: 1, blood: '#4f5d6e' },
   ticket: { spr: 'ticket', hp: 5, spd: 110, dmg: 6, r: 3, xp: 1, ai: AI.ticket, blood: '#f0e6b0', init: e => { e.noSep = true; } },
@@ -155,14 +155,14 @@ const ETYPES = {
     init: e => { e.guard = (en, o) => { if (o.kx === undefined) return 1; const fx = Math.cos(en.face), fy = Math.sin(en.face); if (fx * o.kx + fy * o.ky < -0.35) { fxParticles(en.x + fx * 6, en.y + fy * 6, '#f2c230', 2, 40, 0.2); return 0.25; } return 1; }; } },
   suitcase: { spr: 'suitcase', hp: 26, spd: 40, dmg: 12, r: 5, xp: 3, ai: AI.suitcase, blood: '#7a5530' },
   driver: { spr: 'driver', hp: 640, spd: 36, dmg: 16, r: 9, xp: 30, elite: true, ai: AI.driver, blood: '#1d2a4a', name: 'Il Macchinista Fantasma' },
-  capo: { hp: 6200, spd: 44, dmg: 26, r: 14, xp: 0, boss: true, name: 'Il Capostazione dell\'Ultima Corsa' },
+  capo: { hp: 3800, spd: 44, dmg: 26, r: 14, xp: 0, boss: true, name: 'Il Capostazione dell\'Ultima Corsa' },
   // Stage 3
   chorister: { spr: 'chorister', hp: 24, spd: 34, dmg: 9, r: 5, xp: 2, ai: AI.chorister, blood: '#4a3b5c' },
   ringer: { spr: 'ringer', hp: 22, spd: 46, dmg: 10, r: 5, xp: 2, ai: AI.ringer, blood: '#6b4e2e' },
   candle: { spr: 'candle', hp: 10, spd: 56, dmg: 8, r: 4, xp: 1, ai: AI.candle, blood: '#efe6d2' },
   clapper: { spr: 'clapper', hp: 200, spd: 0, dmg: 14, r: 5, xp: 4, ai: AI.clapper, kbRes: 1, blood: '#8c6a2f', init: e => { e.noSep = true; e.anchored = true; } },
   abbess: { spr: 'abbess', hp: 700, spd: 34, dmg: 16, r: 9, xp: 30, elite: true, ai: AI.abbess, blood: '#8c6a2f', name: 'La Badessa del Rintocco' },
-  bronzo: { hp: 7000, spd: 0, dmg: 20, r: 26, xp: 0, boss: true, name: 'Il Grande Bronzo Afono' },
+  bronzo: { hp: 3600, spd: 0, dmg: 20, r: 26, xp: 0, boss: true, name: 'Il Grande Bronzo Afono' },
   // Minuto 10
   cont: { hp: 1e9, spd: 0, dmg: 999, r: 14, xp: 0, boss: true, ai: AI.cont, name: 'IL CONTINUE', init: e => { e.immune = true; e.noSep = true; } },
 };
