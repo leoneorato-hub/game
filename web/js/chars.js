@@ -112,12 +112,12 @@ const TIERS = [
   { n: 'Rame', c: '#c87533' }, { n: 'Ferro', c: '#a8a8b0' }, { n: 'Argento', c: '#d8dde6' }, { n: 'Oro', c: '#f2c230' },
   { n: 'Demonite', c: '#8a6ae0' }, { n: 'Pietra Infernale', c: '#ff6a2a' }, { n: 'Consacrato', c: '#ffe680' }, { n: 'Luminite', c: '#5ff0c0' },
 ];
-const tierMul = w => 1 + 0.18 * (w.lvl - 1);
+const tierMul = w => 1 + 0.13 * (w.lvl - 1);
 
 // =============================================================================
 // ARMI
 // =============================================================================
-const NAIL_DMG = [5, 5, 9, 9, 13, 13, 17, 17];
+const NAIL_DMG = [5, 6, 8, 9, 11, 12, 14, 15];
 const NAIL_NAMES = ['Vecchio', 'Vecchio', 'Affilato', 'Affilato', 'Canalizzato', 'Canalizzato', 'Spiralato', 'Spiralato'];
 
 function addSoul(n) { G.p.soul = clamp(G.p.soul + n, 0, 99); }
@@ -131,17 +131,18 @@ const WEAPONS = {
     update(w, dt) {
       if (!tick(w, dt)) return;
       const p = G.p;
-      const reach = (24 + (w.lvl >= 2 ? 3 : 0) + (w.lvl >= 6 ? 3 : 0)) * G.s.area * (w.evo ? 1.35 : 1);
-      const e = nearest(p.x, p.y, reach + 4);
+      // Alfa 5: portata proporzionata ai nuovi sprite (prima 24 px: l'Aculeo sembrava non toccare nulla)
+      const reach = (38 + (w.lvl >= 2 ? 5 : 0) + (w.lvl >= 6 ? 5 : 0)) * G.s.area * (w.evo ? 1.3 : 1);
+      const e = nearest(p.x, p.y, reach + 6);
       if (!e) { w.t = 0.05; return; }
       const [dx, dy] = cardinal(e.x - p.x, e.y - p.y);
-      const dmg = (w.evo ? 21 : NAIL_DMG[w.lvl - 1]) * 2.0;
-      const hits = arcHit(p.x, p.y, dx, dy, reach, 1.0, dmg, { kb: 150, src: 'nail' });
+      const dmg = (w.evo ? 21 : NAIL_DMG[w.lvl - 1]) * 2.15;
+      const hits = arcHit(p.x, p.y, dx, dy, reach, 1.25, dmg, { kb: 150, src: 'nail' });
       if (hits.length) {
         addSoul(Math.min(3, hits.length) * (11 + (owned('soulcatcher') ? 3 : 0)));
         p.rx -= dx * 50; p.ry -= dy * 50;
       }
-      fxArc(p.x, p.y, Math.atan2(dy, dx), 1.0, reach * 0.85, w.evo ? '#fffbe0' : '#ffffff', 0.12, 3);
+      fxArc(p.x, p.y, Math.atan2(dy, dx), 1.25, reach * 0.92, w.evo ? '#fffbe0' : '#ffffff', 0.13, 3);
       pose('sword', w.evo ? '#fffbe0' : '#e8e4dc', Math.atan2(dy, dx), 'swing', 0.14);
       if (owned('elegy') && p.hp >= p.maxHp) {
         shoot({ x: p.x, y: p.y, vx: dx * 260, vy: dy * 260, r: 5, dmg: dmg * 0.5, pierce: 4, life: 0.6, kind: 'beam', col: '#ffe680', src: 'nail' });
@@ -161,7 +162,7 @@ const WEAPONS = {
       if (!dir) { w.t = 0.15; return; }
       addSoul(-33);
       const sh = owned('shaman') ? 1.33 : 1;
-      const dmg = 15 * 2.0 * lvMul(w, 0.15) * sh * (w.evo ? 2 : 1);
+      const dmg = 15 * 0.85 * lvMul(w, 0.15) * sh * (w.evo ? 2 : 1);
       p.castT = 0.3;
       const r = 7 * sh * (w.lvl >= 3 ? 1.2 : 1) * (w.evo ? 1.4 : 1) * G.s.area;
       const sp = 230 * (w.lvl >= 7 ? 1.2 : 1);
@@ -179,14 +180,14 @@ const WEAPONS = {
       const p = G.p;
       const r = 62 * G.s.area * (1 + (w.lvl >= 3 ? 0.15 : 0) + (w.lvl >= 6 ? 0.15 : 0));
       let n = 0; GRID.query(p.x, p.y, r * 0.8, () => n++);
-      if (n < 6 || !canSpend(33)) { w.t = 0.2; return; }
+      if (n < 8 || !canSpend(33)) { w.t = 0.2; return; }
       addSoul(-33);
-      const dmg = 30 * 2.0 * lvMul(w, 0.15);
-      aoe(p.x, p.y, r, dmg, { kb: 220, stun: w.lvl >= 5 ? 1 : 0.5 }, '#f2efe6');
-      if (w.lvl >= 8) later(() => { if (MODE === 'play') aoe(G.p.x, G.p.y, r * 1.4, dmg * 0.5, { kb: 160 }, '#9aa6b8'); }, 200);
+      const dmg = 30 * 0.6 * lvMul(w, 0.15);
+      aoe(p.x, p.y, r, dmg, { kb: 220, stun: w.lvl >= 5 ? 1 : 0.5, src: 'ddive' }, '#f2efe6');
+      if (w.lvl >= 8) later(() => { if (MODE === 'play') aoe(G.p.x, G.p.y, r * 1.4, dmg * 0.5, { kb: 160, src: 'ddive' }, '#9aa6b8'); }, 200);
       fxParticles(p.x, p.y, '#f2efe6', 16, 120, 0.4);
       p.jumpT = 0.25; shake(4); sfx('boom');
-      setCd(w, 1.6);
+      setCd(w, 2.6);
     },
   },
   weaver: {
@@ -207,7 +208,7 @@ const WEAPONS = {
         s.x += nx * sp * dt; s.y += ny * sp * dt;
         s.fx = nx;
         if (s.tg && s.cd <= 0 && d2(s.x, s.y, s.tg.x, s.tg.y) < (s.tg.r + 4) ** 2) {
-          hurtEnemy(s.tg, 6 * 2.0 * lvMul(w, 0.12), { silent: true, src: 'weaver' });
+          hurtEnemy(s.tg, 6 * 1.3 * lvMul(w, 0.12), { silent: true, src: 'weaver' });
           if (owned('grubsong')) addSoul(3);
           s.cd = 0.4;
         }
@@ -225,7 +226,7 @@ const WEAPONS = {
         if (w.st <= 0) {
           w.st = 0.12;
           const r = 42 * G.s.area * (w.lvl >= 3 ? 1.15 : 1) * (w.lvl >= 7 ? 1.15 : 1);
-          aoe(p.x, p.y, r, 9 * 2.0 * lvMul(w, 0.15), { kb: 60, src: 'cyclone' }, null);
+          aoe(p.x, p.y, r, 9 * 1.1 * lvMul(w, 0.15), { kb: 60, src: 'cyclone' }, null);
           fxArc(p.x, p.y, rnd(TAU), 1.4, r * 0.9, '#ffffff', 0.12, 2);
         }
         return;
@@ -397,15 +398,15 @@ const WEAPONS = {
         G.dmgTakenMul = Math.min(G.dmgTakenMul, 0.8);
       }
       if (!tick(w, dt)) return;
-      const range = 30 * G.s.area * (w.lvl >= 3 ? 1.12 : 1) * (w.lvl >= 7 ? 1.12 : 1) * (w.evo ? 1.4 : 1);
+      const range = 44 * G.s.area * (w.lvl >= 3 ? 1.12 : 1) * (w.lvl >= 7 ? 1.12 : 1) * (w.evo ? 1.3 : 1);
       const e = nearest(p.x, p.y, range + 6);
       if (!e) { w.t = 0.05; return; }
       w.step = ((w.step || 0) + 1) % 3;
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
       const third = w.step === 2;
-      const dmg = (third ? 28 : 18) * lvMul(w, 0.12) * (w.evo ? 1.6 : 1);
-      arcHit(p.x, p.y, dx, dy, range, third ? 1.3 : 0.95, dmg, { kb: third ? 220 : 60, src: 'stygius', slot: 'attack' });
-      fxArc(p.x, p.y, Math.atan2(dy, dx), third ? 1.3 : 0.95, range * 0.85, w.evo ? '#fff2b0' : '#ff9a5a', 0.13, third ? 4 : 3);
+      const dmg = (third ? 34 : 23) * lvMul(w, 0.12) * (w.evo ? 1.6 : 1);
+      arcHit(p.x, p.y, dx, dy, range, third ? 1.45 : 1.1, dmg, { kb: third ? 220 : 60, src: 'stygius', slot: 'attack' });
+      fxArc(p.x, p.y, Math.atan2(dy, dx), third ? 1.45 : 1.1, range * 0.92, w.evo ? '#fff2b0' : '#ff9a5a', 0.13, third ? 4 : 3);
       pose('sword', w.evo ? '#fff2b0' : '#e2b04a', Math.atan2(dy, dx), 'swing', 0.15, w.evo ? 1.4 : 1.15);
       const fast = w.lvl >= 5 ? 0.85 : 1;
       setCd(w, (third ? 0.55 : 0.27) * G.s.cd * fast * (w.evo ? 1.2 : 1));
@@ -459,18 +460,23 @@ const WEAPONS = {
   // ------------------------------------------------------------------ MADELINE
   dash: {
     name: 'Scatto', icon: ['feather', '#d1343a', '#5fb3ff'], max: 8, evoName: 'Doppio Scatto',
-    lines: ['Scatta da sola nella direzione in cui ti muovi, ferendo chi attraversi', '+15% danno', '−8% ricarica', '+15% distanza', '+15% danno', '−8% ricarica', '+15% distanza', '+25% danno'],
+    lines: ['Scatta da sola verso i nemici (o dove ti muovi), ferendo chi attraversi; all\'arrivo un piccolo impatto', '+15% danno', '−8% ricarica', '+15% distanza', '+15% danno', '−8% ricarica', '+15% distanza', '+25% danno'],
     update(w, dt) {
       const p = G.p;
       const maxC = w.evo ? 2 : 1;
       if (p.charges < maxC && !p.dash) {
         p.recharge += dt;
-        if (p.recharge >= 0.9 * G.s.cd * Math.pow(0.92, Math.floor(w.lvl / 3))) { p.charges = maxC; p.recharge = 0; }
+        if (p.recharge >= 0.6 * G.s.cd * Math.pow(0.92, Math.floor(w.lvl / 3))) { p.charges = maxC; p.recharge = 0; }
       }
       if (!tick(w, dt)) return;
-      if (p.moving && p.charges > 0 && !p.dash) {
-        madelineDash(p.mx, p.my);
-        setCd(w, 1.25 * G.s.cd * Math.pow(0.92, Math.floor(w.lvl / 3)));
+      if (p.charges > 0 && !p.dash) {
+        // Alfa 5: lo scatto mira ai nemici. Se ti muovi, si piega verso il nemico nel cono davanti a te;
+        // da ferma scatta verso il nemico più vicino (prima, senza movimento, Madeline non faceva danno)
+        let dx = p.moving ? p.mx : 0, dy = p.moving ? p.my : 0;
+        const e = nearest(p.x, p.y, p.moving ? 140 : 110, t => !p.moving || ((t.x - p.x) * p.mx + (t.y - p.y) * p.my) / (Math.hypot(t.x - p.x, t.y - p.y) || 1) > 0.65);
+        if (e) [dx, dy] = norm(e.x - p.x, e.y - p.y);
+        if (dx || dy) { madelineDash(dx, dy); setCd(w, 0.8 * G.s.cd * Math.pow(0.92, Math.floor(w.lvl / 3))); }
+        else w.t = 0.05;
       } else w.t = 0.05;
     },
   },
@@ -485,10 +491,10 @@ const WEAPONS = {
       if (!pt) return;
       w.x = pt.x; w.y = pt.y; w.fl = pt.fl;
       w.tk = (w.tk || 0) - dt;
-      const size = 10 * G.s.area * (w.lvl >= 3 ? 1.2 : 1) * (w.lvl >= 6 ? 1.2 : 1);
+      const size = 15 * G.s.area * (w.lvl >= 3 ? 1.2 : 1) * (w.lvl >= 6 ? 1.2 : 1);
       if (w.tk <= 0) {
         w.tk = 0.2;
-        const dmg = 8 * lvMul(w, 0.15);
+        const dmg = 12 * lvMul(w, 0.15);
         for (const e of enemiesIn(w.x, w.y, size)) hurtEnemy(e, dmg, { silent: true, src: 'badeline' });
         if (pt.dash && w.lvl >= 5) for (const e of enemiesIn(w.x, w.y, 16)) hurtEnemy(e, dmg * 2.5, { silent: true, src: 'badeline' });
       }
@@ -555,10 +561,10 @@ const WEAPONS = {
       if (!e) { w.t = 0.2; return; }
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
       const half = w.lvl >= 6 ? 0.8 : 0.6;
-      arcHit(p.x, p.y, dx, dy, range, half, 12 * (w.lvl >= 5 ? 1.15 : 1), { stun: 1.2 + (w.lvl >= 2 ? 0.2 : 0) + (w.lvl >= 8 ? 0.4 : 0), src: 'theo' });
+      arcHit(p.x, p.y, dx, dy, range, half, 28 * lvMul(w, 0.1) * (w.lvl >= 5 ? 1.15 : 1), { stun: 1.2 + (w.lvl >= 2 ? 0.2 : 0) + (w.lvl >= 8 ? 0.4 : 0), src: 'theo' });
       fxArc(p.x, p.y, Math.atan2(dy, dx), half, range * 0.7, '#ffffff', 0.2, 10);
       fxText(p.x, p.y - 18, '#SELFIE', '#c9ced8', 0.6);
-      setCd(w, 4.5 * G.s.cd * Math.pow(0.9, Math.floor(w.lvl / 4 + (w.lvl >= 7 ? 1 : 0))));
+      setCd(w, 3.6 * G.s.cd * Math.pow(0.9, Math.floor(w.lvl / 4 + (w.lvl >= 7 ? 1 : 0))));
     },
   },
   feather: {
@@ -581,15 +587,15 @@ const WEAPONS = {
     update(w, dt) {
       if (!tick(w, dt)) return;
       const p = G.p;
-      const range = 28 * G.s.area * (w.lvl >= 3 ? 1.12 : 1) * (w.lvl >= 7 ? 1.12 : 1) * (w.evo ? 1.2 : 1);
+      const range = 42 * G.s.area * (w.lvl >= 3 ? 1.12 : 1) * (w.lvl >= 7 ? 1.12 : 1) * (w.evo ? 1.2 : 1);
       const e = nearest(p.x, p.y, range + 6);
       if (!e) { w.t = 0.05; return; }
       w.step = ((w.step || 0) + 1) % 3;
       const third = w.step === 2;
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      const dmg = 13 * lvMul(w, 0.12) * (w.evo ? 1.5 : 1);
-      arcHit(p.x, p.y, dx, dy, range, 0.9, dmg, { crit: third, kb: third ? 150 : 50, src: 'rusty' });
-      fxArc(p.x, p.y, Math.atan2(dy, dx), 0.9, range * 0.85, w.evo ? '#ffd23f' : '#ffb07a', 0.12, third ? 4 : 2);
+      const dmg = 9 * lvMul(w, 0.12) * (w.evo ? 1.5 : 1);
+      arcHit(p.x, p.y, dx, dy, range, 1.15, dmg, { crit: third, kb: third ? 150 : 50, src: 'rusty' });
+      fxArc(p.x, p.y, Math.atan2(dy, dx), 1.15, range * 0.92, w.evo ? '#ffd23f' : '#ffb07a', 0.12, third ? 4 : 2);
       pose('sword', w.evo ? '#ffd23f' : '#c87533', Math.atan2(dy, dx), 'swing', 0.13);
       if (third && w.evo) shoot({ x: p.x, y: p.y, vx: dx * 280, vy: dy * 280, r: 6, dmg: 40, pierce: 99, life: 0.6, kind: 'blade', col: '#ffd23f', src: 'rusty' });
       setCd(w, (third ? 0.5 : 0.3) * G.s.cd * (w.lvl >= 5 ? 0.85 : 1) * (w.evo ? 0.7 : 1));
@@ -604,7 +610,7 @@ const WEAPONS = {
       const e = nearest(p.x, p.y, 260);
       if (!e) { w.t = 0.1; return; }
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      shoot({ x: p.x, y: p.y, vx: dx * 360, vy: dy * 360, r: 3, dmg: 16 * lvMul(w, 0.15), pierce: (w.lvl >= 4) + (w.lvl >= 8), life: 0.9, kind: 'arrow', col: '#bfe8ff', freeze: 1, src: 'icebow' });
+      shoot({ x: p.x, y: p.y, vx: dx * 360, vy: dy * 360, r: 3, dmg: 22 * lvMul(w, 0.15), pierce: (w.lvl >= 4) + (w.lvl >= 8), life: 0.9, kind: 'arrow', col: '#bfe8ff', freeze: 1, src: 'icebow' });
       setCd(w, 1.0 * G.s.cd * Math.pow(0.92, (w.lvl >= 3) + (w.lvl >= 6)));
     },
   },
@@ -618,8 +624,8 @@ const WEAPONS = {
       const e = nearest(p.x, p.y, len);
       if (!e) { w.t = 0.1; return; }
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      const dmg = 10 * lvMul(w, 0.15);
-      const hits = beamHit(p.x, p.y, dx, dy, len, 4, dmg, { src: 'whip' });
+      const dmg = 14 * lvMul(w, 0.15);
+      const hits = beamHit(p.x, p.y, dx, dy, len, 5, dmg, { src: 'whip' });
       fxBolt(p.x, p.y, p.x + dx * len, p.y + dy * len, '#c9a6ff', 0.12);
       for (const h of hits) {
         if (h.freezeT > 0 && owned('icebow')) { h.freezeT = 0; aoe(h.x, h.y, 30, 30, { src: 'whip' }, '#bfe8ff'); fxText(h.x, h.y - 10, 'FRANTUMATO', '#bfe8ff', 0.5); }
@@ -633,7 +639,7 @@ const WEAPONS = {
     lines: ['Piazza una torretta che spara al nemico più vicino (Tattica)', '+15% danno', '+1 torretta', '+15% danno', '−10% ricarica', '+1 torretta', '+15% danno', '+25% durata'],
     update(w, dt) {
       w.ents = (w.ents || []).filter(t => t.life > 0);
-      const dmg = 8 * lvMul(w, 0.15);
+      const dmg = 12 * lvMul(w, 0.15);
       for (const t of w.ents) {
         t.life -= dt; t.cd -= dt;
         if (t.cd <= 0) {
@@ -710,11 +716,11 @@ const WEAPONS = {
     update(w, dt) {
       if (!tick(w, dt)) return;
       const p = G.p;
-      const range = 36 * G.s.area * (w.lvl >= 3 ? 1.12 : 1) * (w.lvl >= 7 ? 1.12 : 1);
+      const range = 46 * G.s.area * (w.lvl >= 3 ? 1.12 : 1) * (w.lvl >= 7 ? 1.12 : 1);
       const e = nearest(p.x, p.y, range + 6);
       if (!e) { w.t = 0.05; return; }
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      const dmg = 22 * lvMul(w, 0.12);
+      const dmg = 10 * lvMul(w, 0.12);
       const exec = w.lvl >= 6 ? 0.3 : 0.2;
       const elite = enemiesIn(p.x, p.y, range).find(x => x.elite && !x.boss && x.hp < x.maxHp * exec);
       if (elite) {
@@ -727,10 +733,10 @@ const WEAPONS = {
         addFervour(40); shake(5); sfx('boom');
         setCd(w, 0.5); return;
       }
-      const hits = arcHit(p.x, p.y, dx, dy, range, 1.2, dmg, { kb: 90, src: 'meaculpa', burn: w.evo ? 5 : 0 });
-      addFervour(Math.min(3, hits.length) * 3);
+      const hits = arcHit(p.x, p.y, dx, dy, range, 1.3, dmg, { kb: 90, src: 'meaculpa', burn: w.evo ? 5 : 0 });
+      addFervour(Math.min(3, hits.length) * 4);
       w.side = !w.side;
-      fxArc(p.x, p.y, Math.atan2(dy, dx) + (w.side ? 0.2 : -0.2), 1.2, range * 0.85, w.evo ? '#ff8a2a' : '#e2c46a', 0.14, 3);
+      fxArc(p.x, p.y, Math.atan2(dy, dx) + (w.side ? 0.2 : -0.2), 1.3, range * 0.92, w.evo ? '#ff8a2a' : '#e2c46a', 0.14, 3);
       pose('sword', w.evo ? '#ff8a2a' : '#d9b43a', Math.atan2(dy, dx), 'swing', 0.2, 1.5);
       const fast = G.p.tientoT > 0 && owned('tiento') ? 0.6 : 1;
       setCd(w, 0.62 * G.s.cd * (w.lvl >= 4 ? 0.92 : 1) * fast);
@@ -816,11 +822,11 @@ const WEAPONS = {
       const p = G.p;
       if (w.evo) return zenithUpdate(w, dt);
       if (!tick(w, dt)) return;
-      const range = 26 * G.s.area;
-      const e = nearest(p.x, p.y, range + 4);
+      const range = 40 * G.s.area;
+      const e = nearest(p.x, p.y, range + 6);
       if (!e) { w.t = 0.05; return; }
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      beamHit(p.x, p.y, dx, dy, range, 4, 10 * tierMul(w), { kb: 40, src: 'shortsword' });
+      beamHit(p.x, p.y, dx, dy, range, 7, 14 * tierMul(w), { kb: 40, src: 'shortsword' });
       fxLine(p.x + dx * 6, p.y + dy * 6, p.x + dx * range, p.y + dy * range, TIERS[w.lvl - 1].c, 0.08, 2);
       pose('sword', TIERS[w.lvl - 1].c, Math.atan2(dy, dx), 'stab', 0.12);
       setCd(w, 0.26 * G.s.cd * (1 - 0.03 * w.lvl));
@@ -857,7 +863,7 @@ const WEAPONS = {
         const t = pick(list);
         const sx = t.x - 70, sy = t.y - 150;
         shoot({ x: sx, y: sy, vx: 70 / 0.35, vy: 150 / 0.35, r: 4, dmg: 0, life: 0.35, kind: 'star', col: '#ffd23f', noHit: true,
-          onEnd: pr => { aoe(pr.x, pr.y, 18 * G.s.area, 20 * tierMul(w), { src: 'starfury' }, '#ffd23f'); if (owned('manaflower')) G.p.mana = Math.min(100, G.p.mana + 3); } });
+          onEnd: pr => { aoe(pr.x, pr.y, 18 * G.s.area, 11 * tierMul(w), { src: 'starfury' }, '#ffd23f'); if (owned('manaflower')) G.p.mana = Math.min(100, G.p.mana + 3); } });
       }
       setCd(w, 1.0 * G.s.cd * (1 - 0.05 * w.lvl));
     },
@@ -873,7 +879,7 @@ const WEAPONS = {
       if (!e || p.mana < cost) { w.t = 0.15; return; }
       p.mana -= cost;
       const [dx, dy] = norm(e.x - p.x, e.y - p.y);
-      shoot({ x: p.x, y: p.y, vx: dx * 230, vy: dy * 230, r: 4, dmg: 14 * tierMul(w), pierce: 4 + w.lvl, life: 2.5, kind: 'orb', col: '#4ac0ff', src: 'waterbolt',
+      shoot({ x: p.x, y: p.y, vx: dx * 230, vy: dy * 230, r: 4, dmg: 11 * tierMul(w), pierce: 3 + Math.floor(w.lvl / 2), life: 2.5, kind: 'orb', col: '#4ac0ff', src: 'waterbolt',
         onHit: (pr, t) => { const n = nearest(pr.x, pr.y, 140, x => !pr.hit.has(x)); if (n) { const [nx, ny] = norm(n.x - pr.x, n.y - pr.y); pr.vx = nx * 230; pr.vy = ny * 230; } } });
       setCd(w, 0.9 * G.s.cd);
     },
@@ -893,7 +899,7 @@ const WEAPONS = {
       pose('bee', TIERS[w.lvl - 1].c, Math.atan2(dy, dx), 'over', 0.25, 1.2);
       if (hits.length) for (let i = 0; i < 1 + Math.floor(w.lvl / 3); i++) {
         const a = rnd(TAU);
-        shoot({ x: p.x, y: p.y, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, r: 2, dmg: 5 * tierMul(w), life: 2, kind: 'bee', homing: 6, src: 'beekeeper' });
+        shoot({ x: p.x, y: p.y, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, r: 2, dmg: 8.5 * tierMul(w), life: 2, kind: 'bee', homing: 6, src: 'beekeeper' });
       }
       setCd(w, 0.75 * G.s.cd);
     },
@@ -907,7 +913,7 @@ const WEAPONS = {
       const e = nearest(p.x, p.y, 220);
       if (!e) { w.t = 0.1; return; }
       const a = Math.atan2(e.y - p.y, e.x - p.x) + rnd(-0.06, 0.06);
-      shoot({ x: p.x, y: p.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, r: 2, dmg: 4 * tierMul(w), life: 0.6, kind: 'nail', col: '#ffe680', src: 'minishark' });
+      shoot({ x: p.x, y: p.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, r: 2, dmg: 6.5 * tierMul(w), life: 0.6, kind: 'nail', col: '#ffe680', src: 'minishark' });
       setCd(w, 0.11 * G.s.cd);
     },
   },
@@ -940,7 +946,8 @@ function madelineDash(dx, dy) {
   const w = getW('dash');
   [dx, dy] = norm(dx, dy);
   p.charges--;
-  p.dash = { t: 0.15, dx, dy, sp: 440 * (1 + 0.15 * ((w.lvl >= 4) + (w.lvl >= 7))), hit: new Set(), dmg: 22 * lvMul(w, 0.15) * (w.lvl >= 8 ? 1.25 : 1) };
+  const dmg = 34 * lvMul(w, 0.2) * (w.lvl >= 8 ? 1.25 : 1);
+  p.dash = { t: 0.15, dx, dy, sp: 440 * (1 + 0.15 * ((w.lvl >= 4) + (w.lvl >= 7))), hit: new Set(), dmg, blast: { r: 28 * G.s.area, dmg: dmg * 0.7 } };
   p.invuln = Math.max(p.invuln, 0.2);
   G.hist.push({ x: p.x, y: p.y, t: G.t, dash: true, fl: dx < 0 });
   fxParticles(p.x, p.y, '#ffffff', 6, 60, 0.25);
@@ -1015,11 +1022,11 @@ function zenithDraw(w, c) {
 }
 
 function isaacStats() {
-  const s = { dmg: 3.5, tears: 2.73, range: 6.5, shot: 1, speed: 1, luck: 0, dmgMul: 1, tearsMul: 1 };
+  const s = { dmg: 3.5, tears: 3.4, range: 6.5, shot: 1, speed: 1, luck: 0, dmgMul: 1, tearsMul: 1 };
   const b = G.p.ist;
   s.dmg += b.dmg; s.tears += b.tears; s.range += b.range; s.shot += b.shot; s.speed += b.speed; s.luck += b.luck;
   for (const it of G.passives) if (ISAAC_ITEMS[it.id]) ISAAC_ITEMS[it.id].apply(s);
-  s.realDmg = s.dmg * s.dmgMul * 2.6;
+  s.realDmg = s.dmg * s.dmgMul * 6.2;
   s.realTears = s.tears * s.tearsMul;
   return s;
 }
@@ -1059,7 +1066,7 @@ function isaacTears(w, dt) {
   for (const off of spread) {
     const a = Math.atan2(cy, cx) + off;
     shoot({ x: p.x, y: p.y - 3, vx: Math.cos(a) * sp + p.vx * 0.3, vy: Math.sin(a) * sp + p.vy * 0.3, r: big ? 5 : 3, dmg: st.realDmg, pierce: big ? 1 : 0, life: range / sp,
-      kind: 'tear', col: '#7fb8ff', big, src: 'tears', homing: owned('spoon') ? 5 : 0,
+      kind: 'tear', col: '#7fb8ff', big, src: 'tears', homing: owned('spoon') ? 5 : 1.6,
       onHit: () => { if (G.guppy && G.flies.length < 14) G.flies.push({ x: p.x, y: p.y, life: 5, a: rnd(TAU) }); } });
   }
   setCd(w, 1 / st.realTears);
@@ -1101,9 +1108,9 @@ const CHARS = {
     maxW: 6, maxP: 6, diff: 3,
     resource: 'Stile (D → ULTRAKILL)', life: '100 PV · Danno Duro',
     abilityName: 'Scatto', abilityHint: '3 cariche di stamina, invulnerabile durante lo scatto',
-    blurb: 'Una macchina da guerra che si cura solo col sangue: uccidi da vicino per ripararti. Lo Stile moltiplica l\'esperienza, ma solo se cambi spesso arma.',
+    blurb: 'Una macchina da guerra che si cura col sangue: colpisci e uccidi da vicino per ripararti (fino a 10 PV al secondo). Il danno duro non si cura subito. Lo Stile moltiplica l\'esperienza, ma solo se cambi spesso arma.',
     quote: 'MANKIND IS DEAD. BLOOD IS FUEL. HELL IS FULL.', voice: 'Nessuna voce. Solo testo di sistema.',
-    init(p) { p.hard = 0; p.stam = 3; p.stamT = 0; p.style = 0; p.fresh = {}; },
+    init(p) { p.hard = 0; p.stam = 3; p.stamT = 0; p.style = 0; p.fresh = {}; p.blood = 0; },
     ability(dt, held, pressed) {
       const p = G.p;
       if (pressed && p.stam >= 1 && !p.dash) {
@@ -1119,14 +1126,24 @@ const CHARS = {
       if (G.hitT > 2) p.hard = Math.max(0, p.hard - 4 * dt);
       p.hp = Math.min(p.hp, p.maxHp - p.hard);
       p.style = Math.max(0, Math.min(799, p.style) - (5 + p.style * 0.012) * dt);
+      // Alfa 5: il sangue raccolto entra in una riserva e cura al massimo 10 PV al secondo
+      if (p.blood > 0) { const h = Math.min(p.blood, 10 * dt); p.blood -= h; const cap = p.maxHp - p.hard; if (p.hp < cap) p.hp = Math.min(cap, p.hp + h); }
       if (p.stam < 3) { p.stamT += dt; if (p.stamT >= 1.1) { p.stamT = 0; p.stam++; } }
       for (const k in p.fresh) p.fresh[k] = Math.min(1, p.fresh[k] + 0.08 * dt);
     },
+    // Sangue come in ULTRAKILL: ogni colpo inflitto vicino (70 px) ti spruzza addosso un po' di vita,
+    // proporzionale al danno; le uccisioni ravvicinate ne danno un po' di più. Riserva massima 30 PV.
+    postHit(e, d) {
+      const p = G.p;
+      if (e.prop || d2(e.x, e.y, p.x, p.y) > (70 * G.s.area) ** 2) return;
+      p.blood = Math.min(30, (p.blood || 0) + Math.min(d * 0.03, e.boss ? 2.5 : 1.2));
+      if (Math.random() < 0.3) G.fx.push({ k: 'blood', x: e.x, y: e.y, life: 0.35, max: 0.35, col: '#c41e2a' });
+    },
     onKill(e, o) {
       const p = G.p;
-      if (d2(e.x, e.y, p.x, p.y) < (85 * G.s.area) ** 2) {
-        healPlayer(e.elite ? 25 : 3.5);
-        for (let i = 0; i < 4; i++) G.fx.push({ k: 'blood', x: e.x, y: e.y, life: 0.4, max: 0.4, col: '#c41e2a' });
+      if (d2(e.x, e.y, p.x, p.y) < (90 * G.s.area) ** 2) {
+        p.blood = Math.min(30, (p.blood || 0) + (e.boss ? 20 : e.elite ? 10 : 1.2));
+        for (let i = 0; i < 3; i++) G.fx.push({ k: 'blood', x: e.x, y: e.y, life: 0.4, max: 0.4, col: '#c41e2a' });
       }
       const src = o.src || 'x';
       const f = p.fresh[src] ?? 1;

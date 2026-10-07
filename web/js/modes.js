@@ -114,11 +114,11 @@ function updateProps(dt) {
   if (!G.stage.world && G.stage.id !== 'telaio') return;
   G.brkT -= dt;
   if (G.brkT > 0) return;
-  G.brkT = 2.5;
+  G.brkT = 7;
   const c = G.center;
   let n = 0;
   for (const e of G.enemies) if (e.prop) { if (d2(e.x, e.y, c.x, c.y) > 720 * 720) { e.dead = true; e.noXp = true; } else n++; }
-  if (n >= 7) return;
+  if (n >= 4) return;
   const a = rnd(TAU), d = rnd(170, 330);
   const [x, y] = G.stage.clampPos(c.x + Math.cos(a) * d * 1.3, c.y + Math.sin(a) * d * 0.8);
   const e = spawnEnemy('brk', x, y);
@@ -131,13 +131,13 @@ function breakProp(e) {
   fxParticles(e.x, e.y - 4, e.light || '#c9b8a0', 12, 70, 0.4);
   sfx('hit');
   const luck = G.s.luck || 1;
-  const r = Math.random();
-  let kind;
-  if (r < 0.06 * luck) kind = pick(['pk_rosary', 'pk_hourglass', 'pk_magnet']);
-  else if (r < 0.14 * luck) kind = pick(['pk_bomb', 'pk_ultorb']);
-  else if (r < 0.15 * luck && Math.random() < 0.4) kind = 'pk_revive';
-  else if (r < 0.45) kind = 'food';
-  else if (r < 0.7) kind = Math.random() < 0.15 ? 'pk_purse_big' : 'pk_purse';
-  else { for (let i = 0; i < 4; i++) dropGem(e.x + rnd(-6, 6), e.y + rnd(-6, 6), 2.5); return; }
-  dropPickup(kind, e.x, e.y);
+  const r = Math.random() / luck;
+  let kind = null;
+  if (r < 0.03) kind = pick(['pk_rosary', 'pk_hourglass', 'pk_magnet']);
+  else if (r < 0.07) kind = pick(['pk_bomb', 'pk_ultorb']);
+  else if (r < 0.075) kind = 'pk_revive';
+  else if (r < 0.32) kind = 'food';
+  else if (r < 0.5) kind = Math.random() < 0.12 ? 'pk_purse_big' : 'pk_purse';
+  if (!kind) { for (let i = 0; i < 3; i++) dropGem(e.x + rnd(-6, 6), e.y + rnd(-6, 6), 2); return; }
+  dropPickup(kind, e.x, e.y, { life: 60 });
 }

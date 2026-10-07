@@ -223,12 +223,17 @@ function killEnemy(e, o = {}) {
   if (G.cur) { G.cur.kills++; G.p.ult = Math.min(100, (G.p.ult || 0) + (e.boss ? 25 : e.elite ? 8 : 0.11)); }
   fxParticles(e.x, e.y, e.blood || '#cfc6b8', e.elite ? 18 : 5, 70, 0.35);
   if (!e.noXp) dropGem(e.x, e.y, e.xp);
-  if (!e.elite && !e.boss) {
+  // Alfa 5: i nemici comuni lasciano oggetti molto di rado (al massimo uno ogni ~25 s);
+  // cibo e oggetti speciali arrivano soprattutto dagli oggetti distruttibili, come in VS
+  if (!e.elite && !e.boss && G.t >= (G.dropCD || 0)) {
     const luck = G.s.luck;
-    if (Math.random() < 0.006 * luck) dropPickup('food', e.x, e.y);
-    else if (Math.random() < 0.0025 * luck) dropPickup('yarn', e.x, e.y);
-    else if (Math.random() < 0.003 * luck) dropPickup('strawberry', e.x, e.y);
-    else if (Math.random() < 0.0016 * luck) dropPickup(pick(['pk_rosary', 'pk_hourglass', 'pk_bomb', 'pk_purse', 'pk_ultorb']), e.x, e.y);
+    const r = Math.random() / luck;
+    let kind = null;
+    if (r < 0.0015) kind = 'food';
+    else if (r < 0.0021) kind = 'strawberry';
+    else if (r < 0.0024) kind = 'yarn';
+    else if (r < 0.0027) kind = pick(['pk_rosary', 'pk_hourglass', 'pk_bomb', 'pk_purse', 'pk_ultorb']);
+    if (kind) { dropPickup(kind, e.x, e.y, { life: 50 }); G.dropCD = G.t + 25; }
   }
   if (e.elite && !e.boss) { dropPickup('chest', e.x, e.y); G.elitesKilled++; }
   e.onDeath?.(e);
@@ -596,7 +601,7 @@ function collectPickup(k) {
   const p = G.p;
   switch (k.kind) {
     case 'food':
-      if (G.char.noFood) { if (!k.warned) { fxText(k.x, k.y - 8, 'SOLO SANGUE', '#ff5a6a', 0.8); k.warned = true; } return; }
+      if (G.char.noFood) { k.dead = true; p.blood = Math.min(30, (p.blood || 0) + p.maxHp * 0.15); fxText(k.x, k.y - 8, 'SANGUE RAPPRESO', '#ff5a6a', 0.8); sfx('pick'); break; }
       k.dead = true;
       if (G.char.hpMode === 'hp') healPlayer(p.maxHp * 0.3);
       else if (G.char.hpMode === 'anxiety') healPlayer(35);

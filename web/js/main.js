@@ -211,6 +211,7 @@ function updatePlayer(pl, dt) {
     d.t -= dt;
     if (d.t <= 0) {
       p.dash = null;
+      if (d.blast) { aoe(p.x, p.y, d.blast.r, d.blast.dmg, { kb: 120, src: ch.start }, '#ff9aa8'); fxParticles(p.x, p.y, '#ffd0d8', 6, 70, 0.25); }
       if (ch.id === 'madeline' && getW('dash')?.evo) { aoe(p.x, p.y, 32 * G.s.area, 25, { src: 'dash' }, '#ff7ad9'); fxParticles(p.x, p.y, '#ff9ad9', 10, 90, 0.35); }
     }
     p.vx = 0; p.vy = 0;

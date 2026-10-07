@@ -156,13 +156,13 @@ function render(c) {
     if (tier >= 2) light(g.x, g.y, 10 + tier * 5, tier === 3 ? '#ffffff' : null);
   }
   for (const k of G.pickups) {
+    if (k.life !== undefined && k.life < 4 && Math.floor(k.life * 8) % 2 === 0) continue; // sta per sparire
     let spr = k.kind === 'food' ? (G.players.every(pl => pl.char.id === 'isaac') ? 'heart' : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
     if (!SPR[spr]) spr = PK_FALLBACK[spr] || 'chest';
     if (k.kind.startsWith('pk_')) { const pc = PK_GLOW[k.kind] || '#ffd23f'; c.fillStyle = pc; c.globalAlpha = 0.18 + 0.12 * Math.sin(k.t * 5); c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 9, 0, TAU); c.fill(); c.globalAlpha = 1; light(k.x, k.y, 26, pc); }
     const bob = Math.sin(k.t * 4) * 1.5;
     if (k.kind === 'chest') { c.fillStyle = `rgba(226,176,74,${0.25 + 0.2 * Math.sin(k.t * 6)})`; c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 10, 0, TAU); c.fill(); light(k.x, k.y, 36, '#ffd23f'); }
     if (k.kind === 'unravel') { k.x += (k.vx || 0) / 60; k.y += (k.vy || 0) / 60; if (G.arena) arenaClamp(k, false); }
-    if (k.kind === 'food' && G.players.every(pl => pl.char.noFood)) c.globalAlpha = 0.45;
     drawSpr(c, spr, k.x, k.y + bob, false);
     c.globalAlpha = 1;
   }
@@ -945,7 +945,8 @@ function drawResources(c, x, y) {
       txt(c, RANKS[rk], x + 160, y - 4, RC[rk], 16);
       bar(c, x + 160, y + 13, 60, 2, (p.style % 100) / 100, RC[rk]);
       txt(c, 'XP ×' + (1 + rk * 0.12).toFixed(2), x + 160, y + 18, '#a89a88');
-      txt(c, key + 'SCATTO · [Q] CAMBIA ARMA · SOLO SANGUE CURA', x, y + 23, '#6b6577');
+      if (p.blood > 0.5) { bar(c, x + 60, y + 12, 40, 3, p.blood / 30, '#ff3a4a'); txt(c, 'SANGUE', x + 104, y + 10, '#ff5a6a'); }
+      txt(c, key + 'SCATTO · [Q] CAMBIA ARMA · IL SANGUE CURA DA VICINO', x, y + 23, '#6b6577');
       break;
     }
     case 'zagreus': {
