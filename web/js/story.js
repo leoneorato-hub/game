@@ -277,9 +277,12 @@ function drawPortrait(cnv, who) {
   if (v.boss && BOSSES[v.boss]) {
     const sx = camX, sy = camY;
     camX = 0; camY = 0;
-    c.save(); c.scale(1.6, 1.6);
-    const fake = { x: 0, y: 0, r: BOSSES[v.boss].r, t: 0, flash: 0, face: -1, def: BOSSES[v.boss], p2: false };
-    try { BOSSES[v.boss].draw(c, fake, cnv.width / 3.2, cnv.height / 2.6 + 6); } catch (e) { /* ritratto non disponibile */ }
+    // Alfa 4: il boss entra tutto nel riquadro (gli sprite nuovi sono più alti)
+    const bs = SPR['B_' + v.boss + '_0'];
+    const k = bs ? Math.min(1.6, (cnv.height - 6) / bs.h, (cnv.width - 4) / bs.w) : 1.6;
+    c.save(); c.scale(k, k);
+    const fake = { x: 0, y: 0, r: BOSSES[v.boss].r, t: 0, flash: 0, face: -1, def: BOSSES[v.boss], p2: false, vx: 0, vy: 0 };
+    try { BOSSES[v.boss].draw(c, fake, cnv.width / (2 * k), bs ? (cnv.height - 3) / k - BOSSES[v.boss].r : cnv.height / 2.6 + 6); } catch (e) { /* ritratto non disponibile */ }
     c.restore();
     camX = sx; camY = sy;
   } else if (who === 'v1' && typeof V1REF !== 'undefined' && V1REF.complete && V1REF.naturalWidth) {

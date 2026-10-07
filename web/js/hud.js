@@ -487,7 +487,7 @@ function drawPlayer(c) {
       c.globalAlpha = 1;
       light(p.x, p.y - 14, 34, col);
     }
-    if (ch.id === 'zagreus' && p.moving && Math.random() < 0.5) fxParticles(p.x + rnd(-4, 4), p.y + 10, '#ff8a2a', 1, 15, 0.3);
+    if (ch.id === 'zagreus' && p.moving && Math.random() < 0.15) fxParticles(p.x + rnd(-4, 4), p.y + 12, '#ff8a2a', 1, 12, 0.25);
     void fxDir;
   }
   if (G.overcharmed) { c.fillStyle = '#e0303a'; c.fillRect(x - 1, y - s.h / 2 - 6, 3, 3); }

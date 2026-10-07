@@ -71,8 +71,8 @@
     const W = o.W || w + 2, H = o.H || h + 2;
     const ox = o.ox ?? Math.floor((W - w) / 2), oy = o.oy ?? Math.floor((H - h) / 2);
     const c = makeCanvas(W, H), g = c.getContext('2d');
-    const id = g.createImageData(W, H), D = id.data;
-    const set = (x, y, hx) => { if (x < 0 || y < 0 || x >= W || y >= H) return; const v = rgb(hx), i = (y * W + x) * 4; D[i] = v[0]; D[i + 1] = v[1]; D[i + 2] = v[2]; D[i + 3] = 255; };
+    const id = g.createImageData(W, H), D = id.data, MK = new Uint8Array(W * H);
+    const set = (x, y, hx, m = 1) => { if (x < 0 || y < 0 || x >= W || y >= H) return; const v = rgb(hx), i = (y * W + x) * 4; D[i] = v[0]; D[i + 1] = v[1]; D[i + 2] = v[2]; D[i + 3] = 255; MK[y * W + x] = m; };
     const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? null : B[y][x]);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const ch = B[y][x]; if (ch && pal[ch]) set(x + ox, y + oy, pal[ch]); }
     if (o.ol !== false) {
@@ -85,8 +85,20 @@
           const oc = o.olc && ch in o.olc ? o.olc[ch] : (o.ol || OUT);
           if (oc) { col = oc; break; }
         }
-        if (col) set(x + ox, y + oy, col);
+        if (col) set(x + ox, y + oy, col, 2);
       }
+    }
+    // alone: anello di 1 px attorno al contorno (bagliore pulito, niente pixel sparsi).
+    // o.aura = colore, oppure fn(nx, ny) → colore|null con nx, ny direzione dal centro
+    if (o.aura) {
+      const A = [];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (MK[y * W + x]) continue;
+        if (!((x > 0 && MK[y * W + x - 1] === 2) || (x < W - 1 && MK[y * W + x + 1] === 2) || (y > 0 && MK[(y - 1) * W + x] === 2) || (y < H - 1 && MK[(y + 1) * W + x] === 2))) continue;
+        const col = typeof o.aura === 'function' ? o.aura((x + 0.5 - W / 2) / (W / 2), (y + 0.5 - H / 2) / (H / 2)) : o.aura;
+        if (col) A.push([x, y, col]);
+      }
+      for (const [x, y, col] of A) set(x, y, col, 3);
     }
     if (o.over) for (const [x, y, col] of o.over) set(x + ox, y + oy, col);
     g.putImageData(id, 0, 0);
@@ -294,25 +306,22 @@
       const B = ell(buf(n, n), n / 2, n / 2, n / 2, n / 2, 'c'), D = dep4(B), c = n / 2;
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
         if (!B[y][x]) continue;
-        const dx = x + 0.5 - c, dy = y + 0.5 - c, s = -dx - dy, r = Math.hypot(dx - 0.6, dy - 0.6);
+        const dx = x + 0.5 - c, dy = y + 0.5 - c, s = -dx - dy, k = n % 2 ? 0.5 : 1, r = Math.hypot(dx - k, dy - k);
         if (D[y][x] === 1) B[y][x] = s > 1 ? 'e' : s > -2.5 ? 'd' : 'c';
-        else if (r < core * 0.4 && n >= 11) B[y][x] = 'a';
+        else if (r < 1.05 && n >= 11) B[y][x] = 'a';
         else if (r < core) B[y][x] = 'b';
         else B[y][x] = s > 1.2 ? 'd' : 'c';
       }
       if (n >= 7) { const h = Math.floor(n * 0.3); dot(B, h, h, 'W'); if (n >= 9) dot(B, h + 1, h, 'e'); }
       return B;
     };
-    const halo = (n, R, step, col) => {
-      const p = [], c = n / 2 - 0.5;
-      for (let i = 0; i < 360; i += step) { const a = (i + 22.5) * Math.PI / 180; p.push([Math.round(c + Math.cos(a) * R), Math.round(c + Math.sin(a) * R), col]); }
-      return p;
-    };
+    // membrana: alone ciano di 1 px attorno al contorno, più chiaro in alto a sinistra
+    const memb = (hi, lo) => (nx, ny) => (nx + ny < -0.2 ? hi : lo);
     GEMS.cell = [
       { B: cell(5, 1.1), pal, ol, g: [3, 1, 0], pulse: { c: 'd' } },
       { B: cell(7, 1.6), pal, ol, g: [4, 1, 0], pulse: { c: 'd' } },
-      { B: cell(9, 2.1), pal, ol, W: 13, H: 13, halo: halo(9, 5.6, 45, '#3ae6ff'), g: [6, 1, 0], pulse: { c: 'd' } },
-      { B: cell(11, 2.6), pal, ol, W: 16, H: 16, halo: halo(11, 7.1, 30, '#3ae6ff'), halo2: halo(11, 7.1, 30, '#b4fcff'), g: [8, 1, 1], pulse: { c: 'd' } },
+      { B: cell(9, 2.1), pal, ol, W: 13, H: 13, aura: memb('#3ae6ff', '#1f8fc8'), aura2: memb('#b4fcff', '#3ae6ff'), g: [6, 1, 0], pulse: { c: 'd' } },
+      { B: cell(12, 2.9), pal, ol, W: 16, H: 16, aura: memb('#7af4ff', '#2ab4e8'), aura2: memb('#ffffff', '#7af4ff'), g: [9, 2, 1], pulse: { c: 'd' } },
     ];
   }
 
@@ -321,14 +330,13 @@
   {
     const pal = P5('#4a2606', '#a46a12', '#e2a830', '#ffdc6e', '#fff6d0', { W: '#ffffff' });
     const ol = '#2a1404';
-    const rays = (cx, cy, R, col) => [[cx, cy - R, col], [cx, cy + R, col], [cx - R, cy, col], [cx + R, cy, col], [cx - R + 1, cy - R + 1, col], [cx + R - 1, cy - R + 1, col], [cx - R + 1, cy + R - 1, col], [cx + R - 1, cy + R - 1, col]];
     GEMS.tear = [
       { B: G([
         '..c..',
         '.cdc.',
         'cdedb',
         'cdeeb',
-        '.cdb.']), pal, ol, g: [3, 1, 0], pulse: { c: 'd', d: 'e' } },
+        '.cdb.']), pal, ol, g: [3, 1, 0], pulse: { b: 'c', c: 'd' } },
       { B: G([
         '...c...',
         '..cdc..',
@@ -337,7 +345,7 @@
         'cdeWedb',
         'cdeeedb',
         '.cdddb.',
-        '..bbb..']), pal, ol, g: [5, 2, 0], pulse: { c: 'd', d: 'e' } },
+        '..bbb..']), pal, ol, g: [5, 2, 0], pulse: { b: 'c', c: 'd' } },
       { B: G([
         '....c....',
         '...cdc...',
@@ -349,7 +357,7 @@
         'cdeeWeedb',
         'cddeeeddb',
         '.cdddddb.',
-        '..bbbbb..']), pal, ol, g: [6, 3, 1], pulse: { c: 'd', d: 'e' } },
+        '..bbbbb..']), pal, ol, g: [6, 3, 1], pulse: { b: 'c', c: 'd' } },
       { B: G([
         '.....c.....',
         '....cdb....',
@@ -362,7 +370,7 @@
         'cddeeWeeddb',
         '.cddeeeddb.',
         '..bcdddcb..',
-        '...bbbbb...']), pal, ol, W: 15, H: 17, halo: rays(6, 8, 7, '#ffdc6e'), halo2: rays(6, 8, 7, '#fff6d0'), g: [8, 3, 1], pulse: { c: 'd', d: 'e' } },
+        '...bbbbb...']), pal, ol, W: 15, H: 16, aura: '#b47a14', aura2: '#ffdc6e', g: [8, 3, 1], pulse: { b: 'c', c: 'd' } },
     ];
   }
 
@@ -407,11 +415,11 @@
   }
 
   for (const k in GEMS) GEMS[k].forEach((d, t) => {
-    const over0 = (d.halo || []).slice(), over1 = (d.halo2 || d.halo || []).slice();
+    const over0 = [], over1 = [];
     if (d.g) over1.push(...glint(d.g[0], d.g[1], d.g[2], '#ffffff', d.ga || '#fff6d0'));
     const o = { ol: d.ol, olc: d.olc, W: d.W, H: d.H };
-    const base = bake(d.B, d.pal, Object.assign({ over: over0 }, o));
-    const sp = bake(d.B, d.pulse ? up(d.pal, d.pulse) : d.pal, Object.assign({ over: over1 }, o));
+    const base = bake(d.B, d.pal, Object.assign({ over: over0, aura: d.aura }, o));
+    const sp = bake(d.B, d.pulse ? up(d.pal, d.pulse) : d.pal, Object.assign({ over: over1, aura: d.aura2 || d.aura }, o));
     reg('gem_' + k + '_' + t, base);
     reg('gem_' + k + '_' + t + '_s', sp);
     // compatibilità: gem_<k> = tier 0, gemb_<k> = tier 2 (stesso oggetto, niente doppioni)
@@ -441,22 +449,24 @@
     reg('pk_rosary', bake(B, Object.assign({ R: '#7a1424', q: '#c8303a', Q: '#ff8a80' }, GOLD), { ol: '#2a0a10' }));
   }
 
-  // Clessidra di Crono: blocca i nemici (sabbia di ghiaccio)
-  reg('pk_hourglass', bake(G([
-    '.dddddddd.',
-    'dccccccccb',
-    'c.hSSSSg.b',
-    'c.hSSSsg.b',
-    'c..hSsg..b',
-    'c...Sg...b',
-    'c...Sg...b',
-    'c..hSGg..b',
-    'c.hGSGGg.b',
-    'c.hGsSGg.b',
-    'c.hsSSsg.b',
-    'c.hSSSSg.b',
-    'dccccccccb',
-    '.bbbbbbbb.']), Object.assign({ h: '#d8f4ff', g: '#5a88b0', G: '#24405e', s: '#5ac8ff', S: '#d0f6ff' }, GOLD), { ol: '#1a1430' }));
+  // Clessidra di Crono: blocca i nemici. Montanti d'oro, vetro scuro, sabbia di ghiaccio
+  const HOURGLASS = [
+    'eddddddddc',
+    'cbbbbbbbbb',
+    'd.hiiiiG.b',
+    'd.hSSSSG.b',
+    'd..hSSG..b',
+    'd...hG...b',
+    'd...sG...b',
+    'd..hsiG..b',
+    'd.hiisiG.b',
+    'd.hiSSiG.b',
+    'd.hSSSSG.b',
+    'd.hSsssG.b',
+    'eddddddddc',
+    'bbbbbbbbbb'];
+  const HG_PAL = Object.assign({}, GOLD, { h: '#e8fbff', i: '#26405e', G: '#6a9ac8', s: '#5ac8ff', S: '#c8f4ff' });
+  reg('pk_hourglass', bake(G(HOURGLASS), HG_PAL, { ol: '#1a1430' }));
 
   // Bomba (Isaac): corpo grigio scuro, tappo, miccia accesa
   {
@@ -472,9 +482,9 @@
   // Borsellino di filo d'oro (piccolo) e sacco grande
   {
     const VEL = { 0: '#3a0a14', 1: '#7a1a2a', 2: '#b02a3a', 3: '#e05a5a', 4: '#ff9a8a' };
-    const B = buf(10, 11);
-    ell(B, 5, 7.4, 4.9, 3.6, (nx, ny) => sph('01234', nx, ny));
-    put(B, 1, 1, ['.344332.', '..3221..', 'dcbddcbc', '.d....b.']);
+    const B = buf(10, 12);
+    ell(B, 5, 8.3, 4.9, 3.7, (nx, ny) => sph('01234', nx, ny));
+    put(B, 1, 1, ['.4.3.32.', '.434322.', '..3221..', '.dcbddc.', '.d...b..']);
     reg('pk_purse', bake(B, Object.assign({}, VEL, GOLD)));
     const BB = buf(14, 14);
     ell(BB, 7, 9.2, 6.9, 4.8, (nx, ny) => sph('01234', nx, ny));
@@ -489,15 +499,16 @@
     reg('pk_purse_big', bake(BB, Object.assign({ 0: '#3a2410', 1: '#6e4a24', 2: '#a87a44', 3: '#d8b07a', 4: '#f2dcae', r: '#7a1a2a', R: '#b02a3a', x: '#ffe06a' }, GOLD)));
   }
 
-  // Sfera dell'Ultimate: energia bianco-oro vorticante
+  // Sfera dell'Ultimate: nucleo bianco e tre bracci d'energia d'oro che vorticano, con alone
   {
-    const B = ell(buf(12, 12), 6, 6, 6, 6, (nx, ny) => {
-      const r = Math.hypot(nx, ny), a = Math.atan2(ny, nx), sw = Math.sin(a * 2 + r * 7.5);
-      if (r < 0.26) return 'W';
-      if (r > 0.84) return (nx + ny < 0.2) ? (sw > 0 ? 'd' : 'c') : (sw > 0 ? 'c' : 'b');
-      return sw > 0.5 ? (r < 0.6 ? 'W' : 'e') : sw > -0.1 ? 'd' : sw > -0.7 ? 'c' : 'b';
+    const B = ell(buf(11, 11), 5.5, 5.5, 5.5, 5.5, (nx, ny) => {
+      const r = Math.hypot(nx, ny), a = Math.atan2(ny, nx), lit = -nx - ny;
+      if (r < 0.3) return 'W';
+      if (r < 0.46) return 'e';
+      if (Math.sin(a * 3 - r * 6) > 0.5) return r < 0.75 ? 'W' : 'e';
+      return lit > 0.5 ? 'd' : lit > -0.5 ? 'c' : 'b';
     });
-    reg('pk_ultorb', bake(B, GOLD, { ol: '#6a4008', W: 16, H: 16, over: [[1, 2, '#fff6c8'], [14, 3, '#ffe06a'], [2, 13, '#ffe06a'], [13, 13, '#fff6c8'], [8, 0, '#ffffff'], [15, 8, '#ffffff']] }));
+    reg('pk_ultorb', bake(B, GOLD, { ol: '#6a4008', W: 16, H: 16, aura: (nx, ny) => (nx + ny < 0 ? '#ffe06a' : '#b8800e'), over: glint(11, 0, false) }));
   }
 
   // Ago d'oro con filo rosso: gettone di rianimazione
@@ -766,9 +777,9 @@
   // Lanterna di montagna (Celeste): lanterna calda col tettuccio su un palo di legno,
   // base di pietre e una fila di bandierine di preghiera della vetta
   {
-    const L = { 1: '#4a2a14', 2: '#7a4a22', 3: '#b07a40', 4: '#d8a868', k: '#2a1a14', y: '#fff2b0', Y: '#ffd27a', O: '#ff9a3a', W: '#ffffff', s: '#4a4a5a', S: '#7a7a8c', T: '#a8a8b8', r: '#e0303a', g: '#3fbf5a', b: '#4a8cff', w: '#f2efe6' };
+    const L = { 1: '#4a2a14', 2: '#7a4a22', 3: '#b07a40', 4: '#d8a868', k: '#2a1a14', y: '#fff2b0', Y: '#ffd27a', O: '#ff9a3a', W: '#ffffff', s: '#4a4a5a', S: '#7a7a8c', T: '#a8a8b8', R: '#ff6a5a', r: '#d0283a', G: '#7aee8a', g: '#2fa84a', B: '#8ac4ff', b: '#3a74e0' };
     const mk = k => {
-      const B = G([
+      const B = put(buf(16, 22), 0, 0, [
         '.....43.....',
         '...443322...',
         '.4433222211.',
@@ -791,10 +802,11 @@
         '....3221....',
         '..TSS3SSs...',
         '.TSSSSSsss..']);
-      // bandierine sul filo teso dal tetto
-      path(B, [[10, 3], [11, 5]], 'k');
-      put(B, 10, 4, k ? ['.r', 'g.'] : ['r.', '.g']);
-      if (k) put(B, 4, 5, ['.YyY.', 'YyWyY', '.YyY.']);
+      // tirante dal tetto a un picchetto, con le bandierine di preghiera della vetta
+      path(B, [[10, 3], [14, 19]], 'k'); put(B, 14, 19, ['S', 'S']);
+      const fl = k ? [['B', 'b', 12, 6], ['R', 'r', 13, 10], ['G', 'g', 14, 14]] : [['B', 'b', 12, 5], ['R', 'r', 13, 9], ['G', 'g', 14, 13]];
+      for (const [hi, lo, x, y] of fl) put(B, x, y, [hi + lo, lo + lo, k ? lo + '.' : '.' + lo]);
+      if (k) put(B, 4, 4, ['YyyY', 'yWWy', 'yWWy', 'YWWY', 'OyyO']);
       return bake(B, L, { olc: { O: '#7a3a10', Y: '#7a3a10', y: '#7a3a10', W: '#7a3a10' } });
     };
     brk('brk_lantern', mk(0), mk(1));
@@ -805,44 +817,50 @@
   // ===========================================================================
   const U18 = (name, B, pal, o = {}) => reg(name, bake(Array.isArray(B[0]) ? B : G(B), pal, Object.assign({ W: 18, H: 18 }, o)));
 
-  // Urlo dell'Abisso: volto di Vuoto (maschera del Cavaliere in negativo) che urla,
-  // con lingue d'ombra che salgono orlate di bianco
+  // Urlo dell'Abisso: la maschera bianca del Cavaliere (corna, occhi neri) da cui erompe
+  // verso l'alto una colonna di Vuoto nero orlata di luce pallida
   U18('ult_knight', [
-    '.....w....w.....',
-    '..w..Kw..wK..w..',
-    '..Kw.KK..KK.wK..',
-    '...KwKKwwKKwK...',
-    '..KKKKKKKKKKKK..',
-    '.KKkkkkkkkkkkKK.',
-    '.KkWWkkkkkkWWkK.',
-    'KkkWWWkkkkWWWkkK',
-    'KkkkWWWkkWWWkkkK',
-    'KkkkkWkkkkWkkkkK',
-    '.KkkkkWWWWkkkkK.',
-    '.KkkkWkkkkWkkkK.',
-    '..KkkWkkkkWkkK..',
-    '...KkWkkkkWkK...',
-    '....KkWWWWkK....',
-    '.....KKKKKK.....'], { k: '#0b0910', K: '#2e2840', W: '#f4f0ff', w: '#c8c0e8' }, { ol: '#9a90c0', olc: { w: null } });
+    '.M.....V......M.',
+    '.M....VV..V...M.',
+    '.MM..VVV.VV..MM.',
+    '..M..VvVVvV..M..',
+    '..MM.VVvVVV.MM..',
+    '..MM..VVvV..MM..',
+    '..MM..VVVV..MM..',
+    '..MMM.VVVV.MMM..',
+    '..MMMMMMMMMMMm..',
+    '.MMMMMMMMMMMMMm.',
+    '.MMkkkMMMMkkkMm.',
+    '.MkkkkMMMMkkkkm.',
+    '.MkkkkMMMMkkkkm.',
+    '.MMkkkMMMMkkkMm.',
+    '..MMMMMMMMMMmm..',
+    '....MMMMMMmm....'], { V: '#0b0910', v: '#3a3150', M: '#f4f0ff', m: '#b4aed0', k: '#0b0910' }, { olc: { V: '#d8d0ff' } });
 
-  // Railcannon elettrico: cannone di V1 e raggio blu con fulmini
-  U18('ult_v1', [
-    '.............wcB',
-    '............wcB.',
-    '.....y.....wcB..',
-    '....y.y...wcB...',
-    '.......y.wcB....',
-    '........wcB.y...',
-    '.......wcB.y.y..',
-    '......wcB.....y.',
-    '.....wcB........',
-    '...mnwB.........',
-    '..mnNmk.........',
-    '.mnNmkk.........',
-    'mnbbmk..........',
-    'nmbmk...........',
-    'kmmk............',
-    '.kk.............'], { w: '#ffffff', c: '#9fe4ff', B: '#3a86ff', y: '#bff0ff', m: '#3a3a48', n: '#6a6e80', N: '#a8acbc', k: '#16141e', b: '#4ab0ff' }, { olc: { w: '#1a3a8a', c: '#1a3a8a', B: '#0e1e5a', y: null } });
+  // Railcannon elettrico: il cannone di V1 (bobine azzurre) di profilo che spara il raggio
+  // blu-bianco, con due archi elettrici che saltano dal raggio
+  {
+    const B = G([
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '..nNNNNNn.......',
+      '.nNbNbNbNnBBBBBB',
+      'nNmbmbmbmWcccccc',
+      'nmmmmmmmmWwwwwww',
+      'kmmmmmmmmWcccccc',
+      '.kmmkkkkknBBBBBB',
+      '..mmk...........',
+      '..mmk...........',
+      '..kk............',
+      '................',
+      '................']);
+    path(B, [[11, 5], [12, 4], [11, 3], [13, 1], [14, 2]], 'y');
+    path(B, [[13, 11], [12, 12], [14, 14]], 'y');
+    U18('ult_v1', B, { w: '#ffffff', W: '#ffffff', c: '#9fe4ff', B: '#3a86ff', y: '#bff0ff', m: '#3a3a48', n: '#6a6e80', N: '#a8acbc', k: '#16141e', b: '#4ab0ff' }, { olc: { w: '#1a3a8a', c: '#1a3a8a', B: '#0e1e5a', W: '#1a3a8a', y: '#1a3a8a' } });
+  }
 
   // Chiamata dell'Olimpo: corona d'alloro d'oro (due rami di foglie) e fulmine di Zeus
   {
@@ -863,95 +881,101 @@
       }
     }
     put(B, 6, 14, ['RqR', '.R.']);
-    put(B, 5, 3, [
-      '....ee',
-      '...ed.',
-      '..edd.',
-      '.edddd',
-      '...dd.',
-      '..dd..',
-      '..d...',
-      '.d....']);
-    U18('ult_zagreus', B, Object.assign({}, GOLD, { e: '#ffffff', R: '#8e1424', q: '#e0303a' }), {});
+    put(B, 4, 4, [
+      '....YYY',
+      '...YeY.',
+      '..YeY..',
+      '.YeeeeY',
+      '...YeY.',
+      '..YeY..',
+      '.YeY...',
+      'YY.....']);
+    U18('ult_zagreus', B, Object.assign({}, GOLD, { e: '#ffffff', Y: '#fff27a', R: '#8e1424', q: '#e0303a' }), {});
   }
 
-  // Spinta di Badeline: due comete (Madeline rosa, Badeline viola) con scie spezzate
-  U18('ult_madeline', [
-    '..........ppp...',
-    '.........pPPPp..',
-    '........pPWPPp..',
-    '.......pPPPPp...',
-    '......pPPPpp....',
-    '.....pPp........',
-    '....pP.......vv.',
-    '...p.......vvVVv',
-    '..pP......vVVWVv',
-    '.pP......vVVVVv.',
-    '........vVVVvv..',
-    '.......vVv......',
-    '......vV........',
-    '.....v..........',
-    '...vV...........',
-    '..vV............'], { p: '#c8408a', P: '#ff7ad9', W: '#ffffff', v: '#4a1e7a', V: '#a050d8' }, {});
+  // Spinta di Badeline: Madeline (capelli rosa del doppio scatto) e Badeline (viola, occhi
+  // rossi) scattano in diagonali opposte; le scie si incrociano in un lampo bianco
+  {
+    const B = G([
+      '.vVVv......pPPp.',
+      'vVVVVv....pPPPPp',
+      'vSRSRv....pskskp',
+      'vSSSSv....pssssp',
+      '.v..v......p..p.']).concat(Array.from({ length: 11 }, () => new Array(16).fill(null)));
+    for (let i = 0; i < 10; i++) {
+      if (i === 3 || i === 7) continue;               // scia spezzata (immagini residue)
+      const m = i < 3 ? 'P' : 'p', v = i < 3 ? 'V' : 'v';
+      dot(B, 11 - i, 5 + i, m); dot(B, 12 - i, 5 + i, m);
+      dot(B, 3 + i, 5 + i, v); dot(B, 4 + i, 5 + i, v);
+    }
+    put(B, 6, 8, ['.W.', 'WWW', '.W.']);
+    U18('ult_madeline', B, { p: '#b8329a', P: '#ff7ad9', s: '#ffd8c0', k: '#301234', v: '#4a1e7a', V: '#a050d8', S: '#e8d4f4', R: '#ff3a5a', W: '#ffffff' }, { olc: { W: null } });
+  }
 
-  // Runa dell'Omuncolo: la testa di fiamma magenta vola via lasciando una scia
-  U18('ult_prisoner', [
-    '................',
-    '.........mmmm...',
-    '.......mMMLLMm..',
-    '......mMMLLLMMm.',
-    '.....mMMMMcMMMm.',
-    '....mMMMMcccMMm.',
-    '...mMMMMMMcMMMm.',
-    '..mMMMMMMMMMMm..',
-    '.mMMMMMMMMMMm...',
-    'mMM.mMMMMMmm....',
-    'mM..mMMMmm......',
-    'm..mMM.mm.......',
-    '..mMm...........',
-    '.mm.............',
-    '.m..............',
-    '................'], { m: '#a01e6a', M: '#ff5aa8', L: '#ffb8dc', c: '#ffc23a' }, {});
+  // Runa dell'Omuncolo: la testa-fiamma magenta (con la croce d'oro, come lo sprite del
+  // Prigioniero) vola via verso l'alto a destra trascinando una scia di fiamma
+  {
+    const B = buf(16, 16);
+    // scia: cuneo di fiamma che si assottiglia verso il basso a sinistra, con due lingue
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const u = (x + 0.5 - 0.5) * 0.7071 - (y + 0.5 - 15.5) * 0.7071;   // lungo la scia
+      const v = (x + 0.5 - 0.5) * 0.7071 + (y + 0.5 - 15.5) * 0.7071;   // di traverso
+      if (u < 0.6 || u > 12) continue;
+      const half = 0.55 + u * 0.3;
+      if (Math.abs(v) > half || (u < 3.2 && Math.abs(v) < 0.6)) continue;   // coda biforcuta
+      B[y][x] = Math.abs(v) < half * 0.4 && u > 5 ? 'd' : Math.abs(v) < half * 0.8 ? 'c' : 'b';
+    }
+    ell(B, 10, 7.2, 5, 4.6, (nx, ny) => sph('abcde', nx, ny));
+    put(B, 6, 0, ['...c.....', '...dc..c.', '.c.dc.cd.', '.dcdd.dc.']);
+    put(B, 9, 5, ['.y.', 'yYy', '.y.']);
+    U18('ult_prisoner', B, { a: '#4a0a30', b: '#a01e6a', c: '#e0408a', d: '#ff7ab8', e: '#ffc8e4', y: '#ffb02a', Y: '#fff2a0' }, { ol: '#2a0618' });
+  }
 
-  // Mattutino del Guardiano: gigante spettrale d'oro col cappuccio a punta (capirote),
-  // occhi di luce, che impugna una grande spada levata
+  // Mattutino del Guardiano: lo spettro d'oro del Penitente (capirote con la corona di spine,
+  // occhi di luce) che leva la spada e svanisce in una coda di fumo
   U18('ult_penitent', [
-    '......yd.....T..',
+    '......yd....T...',
     '......ydc...TS..',
     '.....yddc...TS..',
     '.....yddcc..TS..',
     '....ydddcc..TS..',
+    '...tdtdtctc.TS..',
     '....dkkkkc..TS..',
     '....dkWkWc..TS..',
-    '....dkkkkc..TS..',
     '..yyddddddccTSc.',
     '.ydddddddddGGGGc',
     '.dddddddddddcHc.',
-    '.ddcddddddcccHc.',
-    '.dd.dddddd.cc...',
-    '.d..dddddd..c...',
-    '....dd..dd......',
-    '....d....d......'], { y: '#fff4c8', d: '#ffd27a', c: '#c8902a', k: '#5a3606', W: '#ffffff', S: '#f0f6ff', T: '#9ab0d0', G: '#e2b030', H: '#8a5a1a' }, { ol: '#4a2a06' });
+    '.dcdddddddcccHc.',
+    '..dddddddddc....',
+    '...ddddddcc.....',
+    '....d.dddc......',
+    '.......dc.......'], { y: '#fff4c8', d: '#ffd27a', c: '#c8902a', k: '#5a3606', t: '#8a5a1a', W: '#ffffff', S: '#f0f6ff', T: '#9ab0d0', G: '#e2b030', H: '#8a5a1a' }, { ol: '#5a3606' });
 
-  // Ultimo Prisma: prisma di vetro e raggi arcobaleno che convergono
-  U18('ult_terrarian', [
-    '...............W',
-    '.............WwW',
-    '...........rowW.',
-    '.........roygw..',
-    '.......roygbv...',
-    '.....roygbv.....',
-    '....oygbv.......',
-    '...hHHv.........',
-    '..hHHHH.........',
-    '.hHWHHHg........',
-    'hHHHHHHgg.......',
-    '.gHHHHggg.......',
-    '..gHHggg........',
-    '...gggg.........',
-    '....gg..........',
-    '................'], { r: '#ff3a3a', o: '#ff9a2a', y: '#ffe63a', g: '#7ac0e0', b: '#3a8aff', v: '#a04aff', h: '#e8faff', H: '#b8e8ff', W: '#ffffff', w: '#fff6f0' },
-    { olc: { r: '#5a0a10', o: '#5a2a0a', y: '#5a4a0a', b: '#0a1a5a', v: '#2a0a5a', w: null, W: null } });
+  // Ultimo Prisma: prisma triangolare di cristallo; i sei raggi colorati escono dalla punta
+  // e convergono in un unico raggio bianco
+  {
+    const B = G([
+      '..............WW',
+      '............wWWw',
+      '...........rowW.',
+      '.........roynw..',
+      '.......roynbv...',
+      '.....roynbv.....',
+      '....oynbv.......',
+      '...oynbv........'].concat(Array(8).fill('................')));
+    // prisma inclinato con la punta verso il raggio: faccia chiara, faccia in ombra, spigolo bianco
+    const P = [[7.2, 6.8], [0.2, 10.5], [4.8, 15.8]], M2 = [(P[1][0] + P[2][0]) / 2, (P[1][1] + P[2][1]) / 2];
+    const side = (ax, ay, bx, by, x, y) => (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    for (let y = 6; y < 16; y++) for (let x = 0; x < 9; x++) {
+      const px = x + 0.5, py = y + 0.5;
+      const s1 = side(...P[0], ...P[1], px, py), s2 = side(...P[1], ...P[2], px, py), s3 = side(...P[2], ...P[0], px, py);
+      if (!((s1 <= 0 && s2 <= 0 && s3 <= 0) || (s1 >= 0 && s2 >= 0 && s3 >= 0))) continue;
+      const r = side(P[0][0], P[0][1], M2[0], M2[1], px, py);
+      B[y][x] = Math.abs(r) < 3.2 ? 'h' : r > 0 ? 'H' : 'g';
+    }
+    U18('ult_terrarian', B, { r: '#ff3a3a', o: '#ff9a2a', y: '#ffe63a', n: '#5ae06a', b: '#3a8aff', v: '#a04aff', h: '#ffffff', H: '#c8f0ff', g: '#7ab8e0', G: '#3a6a9a', W: '#ffffff', w: '#fff6f0' },
+      { olc: { r: '#5a0a10', o: '#5a2a0a', y: '#5a4a0a', n: '#0a3a14', b: '#0a1a5a', v: '#2a0a5a', w: null, W: null } });
+  }
 
   // Mega Laser: occhio in lacrime di Isaac che spara un raggio rosso e bianco
   U18('ult_isaac', [
@@ -994,21 +1018,22 @@
     '.rR...dc......',
     'rR............',
     'R.............'], Object.assign({}, STEEL, GOLD, RED));
+  // scudo a goccia: piastra d'argento in due toni, bordo d'oro e una cucitura rossa al centro
   PU('armor', [
     '.dddddddddddc.',
-    'dcTTTTTTTTtScb',
-    'dTtTtTtTtTtSsb',
-    'dTttttttttSSsb',
-    'dtTtTtTtTtSssb',
-    'dttttttttSSssb',
-    '.dtTtTtTtSsSb.',
-    '.dtttttttSSsb.',
-    '..dtTtTtSssb..',
-    '..dtttttSSsb..',
-    '...dtTtSssb...',
-    '....dttSsb....',
+    'deTTTTTRtttScb',
+    'dTWTTTTrtttSsb',
+    'dTTTTTTRtttSsb',
+    'dTTTTTTrttSSsb',
+    'dTTTTTTRttSSsb',
+    '.dTTTTTrtSSsb.',
+    '.dTTTTTRtSSsb.',
+    '..dTTTTrSSsb..',
+    '..dTTTTRSssb..',
+    '...dTTTrssb...',
+    '....dTTRsb....',
     '.....dcbb.....',
-    '......bb......'], Object.assign({}, STEEL, GOLD));
+    '......bb......'], Object.assign({}, STEEL, GOLD, { R: '#c41e2a', r: '#7a1420' }));
   const heart = [
     '..qqq....qqq..',
     '.qQQRR..qRRRr.',
@@ -1024,19 +1049,7 @@
     '......rr......'];
   { const B = G(['..............', '..............'].concat(heart)); put(B, 1, 0, ['BB.......YY.', 'Bb.......Yy.', '..t.....t...', '...t...t....']); reg('pu_maxhp', bake(B, Object.assign({ B: '#5ab0ff', b: '#2a5ac8', Y: '#ffe06a', y: '#c8901a' }, RED, STEEL), { W: 16, H: 16 })); }
   { const B = G(['..............', '..............'].concat(heart)); put(B, 4, 4, ['..WG..', '..Wg..', 'WWWGGG', 'GGWggg', '..Gg..', '..gg..']); reg('pu_recovery', bake(B, Object.assign({}, RED, { g: '#2a8a3a', G: '#6aff8a', W: '#e8ffe8' }), { W: 16, H: 16 })); }
-  PU('cooldown', [
-    '.dddddddddd.',
-    'dccccccccccb',
-    '.c.hSSSSg.b.',
-    '.c..hSsg..b.',
-    '.c...Sg...b.',
-    '.c...Sg...b.',
-    '.c..hSGg..b.',
-    '.c.hGSGGg.b.',
-    '.c.hsSSsg.b.',
-    '.c.hSSSSg.b.',
-    'dccccccccccb',
-    '.bbbbbbbbbb.'], Object.assign({ h: '#d8f4ff', g: '#5a88b0', G: '#24405e', s: '#5ac8ff', S: '#d0f6ff' }, GOLD));
+  reg('pu_cooldown', bake(G(HOURGLASS), HG_PAL, { ol: '#1a1430', W: 16, H: 16 }));
   PU('area', [
     '....dddddd....',
     '..dd......cc..',

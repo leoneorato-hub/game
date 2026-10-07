@@ -19,8 +19,24 @@
   const span = (lo, hi) => { RR[0] = lo; RR[1] = hi; return RR; };
   const RGB = {};
   const rgbOf = h => RGB[h] || (RGB[h] = HEX(h));
-  // materiali: tutti con la stessa forma (accessi monomorfici nel cuocitore)
-  const MAT = (r, o = {}) => ({ r, glow: !!o.glow, base: o.base ?? 1, ol: o.ol || null, ink: o.ink || null, soft: !!o.soft, noOl: !!o.noOl, nocast: !!o.nocast, _rgb: null, _ol: 0 });
+  // colore ABGR come int32 (resta Smi: niente numeri in virgola mobile nel cuocitore)
+  const packHex = h => { const v = rgbOf(h); return (255 << 24 | v[2] << 16 | v[1] << 8 | v[0]) | 0; };
+  // materiali: le proprietà che servono al cuocitore stanno in tabelle tipizzate indicizzate
+  // per id, così i cicli per pixel leggono solo numeri (molto più veloce al caricamento)
+  const MAXM = 256;
+  const M_GLOW = new Uint8Array(MAXM), M_NOOL = new Uint8Array(MAXM), M_NOCAST = new Uint8Array(MAXM);
+  const M_BASE = new Int8Array(MAXM), M_LEN = new Int8Array(MAXM), M_OFF = new Int16Array(MAXM);
+  const M_INK = new Int32Array(MAXM), M_SOFTC = new Int32Array(MAXM), PALI = new Int32Array(MAXM * 6);
+  let nMat = 0, nPal = 0;
+  const MAT = (r, o = {}) => {
+    const id = ++nMat;
+    M_GLOW[id] = o.glow ? 1 : 0; M_NOOL[id] = o.noOl ? 1 : 0; M_NOCAST[id] = o.nocast ? 1 : 0;
+    M_BASE[id] = o.base ?? 1; M_LEN[id] = r.length; M_OFF[id] = nPal;
+    for (let q = 0; q < r.length; q++) PALI[nPal++] = packHex(r[q]);
+    M_INK[id] = o.glow || o.soft ? 0 : packHex(o.ink || INK); // 0 = contorno morbido (colore proprio)
+    M_SOFTC[id] = packHex(o.ol || r[0]);
+    return { r, id, ol: o.ol || null };
+  };
 
   class Px {
     // free: lati su cui le forme possono toccare il bordo (di norma resta 1 px per il contorno)
@@ -29,11 +45,11 @@
       this.cx0 = free.all || free.left ? 0 : 1; this.cy0 = free.all || free.top ? 0 : 1;
       this.cx1 = free.all || free.right ? w - 1 : w - 2; this.cy1 = free.all || free.bottom ? h - 1 : h - 2;
       this.sid = new Int32Array(N); this.mt = new Array(N).fill(null); this.tn = new Int8Array(N); this.fx = new Uint8Array(N);
-      this.n = 0; this.info = [null];
+      this.n = 0; this.edg = [0]; this.cst = [0]; // per forma: linea interna (-1 = no, 9 = nera) e ombra portata (Smi)
       this.bx0 = w; this.by0 = h; this.bx1 = -1; this.by1 = -1;
     }
     _bb(xa, ya, xb, yb) { if (xa < this.bx0) this.bx0 = xa; if (ya < this.by0) this.by0 = ya; if (xb > this.bx1) this.bx1 = xb; if (yb > this.by1) this.by1 = yb; }
-    _new(o) { this.n++; this.info[this.n] = { edge: o.edge, cast: o.cast !== false }; return this.n; }
+    _new(o) { const e = o.edge; this.n++; this.edg.push(e === undefined || e === false ? -1 : e === true ? 9 : e | 0); this.cst.push(o.cast === false ? 0 : 1); return this.n; }
     // riempimento generico: f(x,y) -> null fuori | v (0..1) luminosità
     // rr(yc) opzionale: intervallo [lo, hi] della riga (in coordinate continue) per saltare i vuoti
     fill(x0, y0, x1, y1, f, m, o = {}, rr) {
@@ -172,64 +188,58 @@
     get(x, y) { if (x < 0 || y < 0 || x >= this.w || y >= this.h) return null; return this.mt[y * this.w + x]; }
     // cottura: pulizia orfani, ombre portate, linee interne, nuclei emissivi, contorno
     bake(o = {}) {
-      const { w, h, sid, mt, tn, fx, info } = this;
-      const c = makeCanvas(w, h), cx = c.getContext('2d'), id = new ImageData(w, h);
+      const { w, h, sid, mt, tn, fx } = this, EDG = this.edg, CST = this.cst;
+      const c = makeCanvas(w, h);
       if (this.bx1 < 0) return c;
+      const cx = c.getContext('2d'), id = new ImageData(w, h);
       const X0 = Math.max(0, this.bx0 - 1), X1 = Math.min(w - 1, this.bx1 + 1), Y0 = Math.max(0, this.by0 - 1), Y1 = Math.min(h - 1, this.by1 + 1);
-      const U = new Uint32Array(id.data.buffer), G = new Uint8Array(w * h), T0 = Int8Array.from(tn);
-      // proprietà per forma in array piatti: linea interna (-1 = no, 9 = nera) e ombra portata
-      const NS = this.n + 1, EDG = new Int8Array(NS), CST = new Uint8Array(NS);
-      for (let k = 1; k < NS; k++) { const e = info[k].edge; EDG[k] = e === undefined || e === false ? -1 : e === true ? 9 : e; CST[k] = info[k].cast ? 1 : 0; }
+      const N = w * h, U = new Int32Array(id.data.buffer), G = new Uint8Array(N), T0 = new Int8Array(tn), MI = new Int16Array(N);
+      // id del materiale per pixel (0 = vuoto)
+      for (let y = Y0; y <= Y1; y++) for (let x = X0, i = y * w + X0; x <= X1; x++, i++) if (sid[i] !== 0) { const m = mt[i]; if (m !== null) MI[i] = m.id; }
       // 1) maschera emissiva + pixel orfani (un tono isolato dentro la stessa forma prende il tono dei vicini)
-      for (let y = Math.max(1, Y0); y <= Math.min(h - 2, Y1); y++) for (let x = Math.max(1, X0), i = y * w + x; x <= Math.min(w - 2, X1); x++, i++) {
-        const s = sid[i];
-        if (s === 0) continue;
-        const m = mt[i];
-        if (m === null) continue;
-        if (m.glow) { G[i] = 1; continue; }
+      const ya = Math.max(1, Y0), yb = Math.min(h - 2, Y1), xa = Math.max(1, X0), xb = Math.min(w - 2, X1);
+      for (let y = ya; y <= yb; y++) for (let x = xa, i = y * w + xa; x <= xb; x++, i++) {
+        const k = MI[i];
+        if (k === 0) continue;
+        if (M_GLOW[k] === 1) { G[i] = 1; continue; }
         if (fx[i] === 1) continue;
-        const t0 = T0[i];
-        if ((sid[i - 1] === s && T0[i - 1] === t0 && mt[i - 1] === m) || (sid[i + 1] === s && T0[i + 1] === t0 && mt[i + 1] === m) ||
-            (sid[i - w] === s && T0[i - w] === t0 && mt[i - w] === m) || (sid[i + w] === s && T0[i + w] === t0 && mt[i + w] === m)) continue;
+        const s = sid[i], t0 = T0[i];
+        if ((sid[i - 1] === s && T0[i - 1] === t0 && MI[i - 1] === k) || (sid[i + 1] === s && T0[i + 1] === t0 && MI[i + 1] === k) ||
+            (sid[i - w] === s && T0[i - w] === t0 && MI[i - w] === k) || (sid[i + w] === s && T0[i + w] === t0 && MI[i + w] === k)) continue;
         let nb = 0, t1 = -1, c1 = 0, t2 = -1, c2 = 0, j, tj;
-        j = i + w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        j = i - w; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        j = i + 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
-        j = i - 1; if (sid[j] === s && mt[j] === m) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i + w; if (sid[j] === s && MI[j] === k) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i - w; if (sid[j] === s && MI[j] === k) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i + 1; if (sid[j] === s && MI[j] === k) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
+        j = i - 1; if (sid[j] === s && MI[j] === k) { nb++; tj = T0[j]; if (t1 < 0 || tj === t1) { t1 = tj; c1++; } else if (t2 < 0 || tj === t2) { t2 = tj; c2++; } }
         if (nb >= 3) tn[i] = c1 >= c2 ? t1 : t2;
       }
       // pixel emissivi sul bordo della tela (fuori dal ciclo precedente)
       for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
         if (y > 0 && y < h - 1 && x > 0 && x < w - 1) { if (x < X1) x = X1 - 1; continue; }
-        const i = y * w + x, m = mt[i]; if (sid[i] && m && m.glow) G[i] = 1;
+        const i = y * w + x; if (M_GLOW[MI[i]] === 1) G[i] = 1;
       }
       const gAt = (x, y) => x >= 0 && y >= 0 && x < w && y < h && G[y * w + x] === 1;
-      const pack = m => m._rgb || (m._rgb = m.r.map(hx => { const v = rgbOf(hx); return (255 << 24 | v[2] << 16 | v[1] << 8 | v[0]) >>> 0; }));
-      const inkOf = mm => mm.glow || mm.soft ? 0 : mm.ink ? (mm._ol || (mm._ol = pack({ r: [mm.ink] })[0])) : INKU;
-      const softOf = mm => mm._ol || (mm._ol = pack({ r: [mm.ol || mm.r[0]] })[0]);
-      const INKU = pack({ r: [INK] })[0], outline = o.outline !== false;
+      const outline = o.outline !== false;
       // 2) colore: nuclei emissivi, linee interne, ombre portate · contorno d'inchiostro sui vuoti
       for (let y = Y0; y <= Y1; y++) for (let x = X0, i = y * w + X0; x <= X1; x++, i++) {
-        const s = sid[i], m = s === 0 ? null : mt[i];
-        if (m === null) {
+        const k = MI[i];
+        if (k === 0) {
           if (!outline) continue;
-          const dn = y + 1 < h && sid[i + w] !== 0, up = y > 0 && sid[i - w] !== 0, rt = x + 1 < w && sid[i + 1] !== 0, lf = x > 0 && sid[i - 1] !== 0;
-          if (!(dn || up || rt || lf)) continue;
-          let hard = 0, soft = null, mm;
-          if (dn && (mm = mt[i + w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (up && (mm = mt[i - w]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (rt && (mm = mt[i + 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (lf && (mm = mt[i - 1]) && !mm.noOl) { const k = inkOf(mm); if (k) hard = k; else soft = mm; }
-          if (hard) U[i] = hard; else if (soft) U[i] = softOf(soft);
+          let hard = 0, soft = 0, kk;
+          if (y + 1 < h && (kk = MI[i + w]) !== 0 && M_NOOL[kk] === 0) { if (M_INK[kk] !== 0) hard = M_INK[kk]; else soft = kk; }
+          if (y > 0 && (kk = MI[i - w]) !== 0 && M_NOOL[kk] === 0) { if (M_INK[kk] !== 0) hard = M_INK[kk]; else soft = kk; }
+          if (x + 1 < w && (kk = MI[i + 1]) !== 0 && M_NOOL[kk] === 0) { if (M_INK[kk] !== 0) hard = M_INK[kk]; else soft = kk; }
+          if (x > 0 && (kk = MI[i - 1]) !== 0 && M_NOOL[kk] === 0) { if (M_INK[kk] !== 0) hard = M_INK[kk]; else soft = kk; }
+          if (hard !== 0) U[i] = hard; else if (soft !== 0) U[i] = M_SOFTC[soft];
           continue;
         }
+        const s = sid[i], L = M_LEN[k] - 1;
         let t = tn[i];
-        const R = m._rgb || pack(m), L = R.length - 1;
         if (G[i] === 1) {
           if (fx[i] === 0) {
             let d = 1;
             for (; d < 4; d++) if (!gAt(x, y + d) || !gAt(x, y - d) || !gAt(x + d, y) || !gAt(x - d, y)) break;
-            t = m.base + d - 1;
+            t = M_BASE[k] + d - 1;
           }
         } else {
           const edge = EDG[s];
@@ -242,16 +252,26 @@
             else if (x > 0 && (s2 = sid[i - 1]) && s2 < s && !G[i - 1]) e = true;
             if (e) t = edge === 9 ? 0 : (edge < t ? edge : t);
           }
-          if (!e && fx[i] === 0 && !m.nocast && y > 0) {
+          if (!e && fx[i] === 0 && M_NOCAST[k] === 0 && y > 0) {
             const upS = sid[i - w];
             if (upS > s && CST[upS] === 1 && !G[i - w] && t > 0) t--;
           }
         }
-        U[i] = R[t < 0 ? 0 : t > L ? L : t];
+        U[i] = PALI[M_OFF[k] + (t < 0 ? 0 : t > L ? L : t)];
       }
       cx.putImageData(id, 0, 0);
       return c;
     }
+  }
+  // Riscaldamento: un minuscolo sprite di prova che passa per tutti i rami del cuocitore,
+  // così il JIT lo ottimizza una volta sola invece di de-ottimizzarlo a ogni ramo nuovo.
+  {
+    const A = MAT(['#000000', '#222222', '#444444', '#666666']), B = MAT(['#111111', '#333333', '#555555'], { glow: true, base: 1, ol: '#000000' });
+    const C = MAT(['#101010', '#202020', '#303030'], { soft: true }), P = new Px(16, 12);
+    P.ell(6, 6, 5, 4.5, A); P.ell(8, 5, 3, 2.5, A, { edge: 1 }); P.ell(9, 7, 2, 2, A, { edge: true });
+    P.ell(4, 6, 2.6, 2.6, B); P.px(5, 9, A, 3, { keep: true }); P.px(13, 3, B, 2);
+    P.rect(11, 6, 3, 4, C); P.line(1, 10, 6, 10, A, 2);
+    P.bake();
   }
   // Registrazione nel registro SPR con la stessa forma di regSprite ({img, white, flip, flipWhite, w, h}),
   // ma le varianti bianca/specchiata si creano solo al primo uso (molti boss non vengono mai
@@ -322,7 +342,7 @@
       P.cap(CX - 4, 56, CX - 7, 64 + k, 1.6, SKD, { r2: 0.8 });
       P.cap(CX + 4, 56, CX + 6, 66 - k, 1.6, SKD, { r2: 0.8 });
       for (let i = 0; i < 7; i++) {
-        const y = 57 + i * 2.3, x = CX + Math.sin(i * 0.8 + k * 0.7) * (i * 0.3);
+        const y = 57 + i * 2.4, x = CX + Math.sin(i * 0.8 + k * 0.7) * (i * 0.3);
         P.ell(x, y, 2.7 - i * 0.22, 1.2, BONE, { fl: 0.7 });
         if (i < 5) { P.px(x - 3 + i * 0.2, y, BONE, 1, { same: true }); P.px(x + 3 - i * 0.2, y, BONE, 1, { same: true }); }
       }
@@ -354,7 +374,7 @@
         P.path([[hx - 5, hy - 3], [hx - 2, hy - 4.6], [hx + 2, hy - 4.6], [hx + 5, hy - 3]], SK, 1, { keep: true });
         P.path([[hx - 4, hy + 6], [hx, hy + 7.4], [hx + 4, hy + 6]], SK, 2, { keep: true });
         // occhio nel palmo
-        eye(P, hx, hy + 1.2, 4.4, 3.3, p2 ? 1 : (k ? 0.72 : 0.92), p2, -s * 0.6);
+        eye(P, hx, hy + 1.2, 4.4, 3.3, p2 ? 1 : 0.92, p2, -s * 0.6); // sempre aperto: niente ammiccare a 3 Hz
       }
       // ---- busto: torace largo che si stringe in vita, chiuso in basso da carne lacera
       P.poly([[CX - 21, 31], [CX + 21, 31], [CX + 18, 42], [CX + 11, 52], [CX + 9, 57], [CX + 5, 55.5], [CX + 2, 58], [CX - 2, 56], [CX - 5, 58], [CX - 9, 56], [CX - 11, 52], [CX - 18, 42]], SK, { fl: 0.7 });
@@ -387,9 +407,13 @@
       P.path([[CX, 1.5], [CX, 10]], BR, 0, { keep: true });
       // arcata sopraccigliare + occhio frontale
       P.path([[CX - 8, 13], [CX - 4, 11.6], [CX + 4, 11.6], [CX + 8, 13]], SKD, 2, { keep: true });
-      eye(P, CX, 16.5, 5.2, 3.8, p2 ? 1 : (k ? 0.75 : 1), p2, 0);
+      eye(P, CX, 16.5, 5.2, 3.8, 1, p2, 0);
       // orbite infossate ai lati con occhietti azzurri
-      for (const s of [-1, 1]) { P.ell(CX + s * 8.6, 21.5, 2.6, 1.9, CAV, { keep: true, tone: 1 }); P.px(CX + s * 8.6 - (s > 0 ? 1 : 0), 21, IRIS, p2 ? 4 : 2, { keep: true }); }
+      // cinque occhi in tutto: quello frontale + due sulle tempie + due sotto gli zigomi
+      for (const s of [-1, 1]) {
+        P.ell(CX + s * 8.6, 21.5, 2.6, 1.9, CAV, { keep: true, tone: 1 }); P.px(CX + s * 8.6 - (s > 0 ? 1 : 0), 21, IRIS, p2 ? 4 : 2, { keep: true });
+        P.ell(CX + s * 10.2, 15.2, 2, 1.5, CAV, { keep: true, tone: 1 }); P.px(CX + s * 10.2 - (s > 0 ? 1 : 0), 15, IRIS, p2 ? 4 : 2, { keep: true });
+      }
       // zigomi
       for (const s of [-1, 1]) P.path([[CX + s * 12, 19], [CX + s * 10, 24], [CX + s * 7, 25.5]], SK, 1, { keep: true });
       // bocca con denti
@@ -434,9 +458,12 @@
       const robe = p2 ? CRIM : ROBE, cape = p2 ? CHAR : RED, gold = p2 ? CHAR : GOLD, trim = p2 ? FIRE : GOLD;
       // ---- raggiera da ostensorio dietro (oro / fuoco): raggi alterni lunghi e corti
       const ac = [CX, 21];
-      for (let i = 0; i < 25; i++) {
-        const a = Math.PI * 0.92 + i / 24 * Math.PI * 1.16, L = i % 2 ? 21 : 27, c = Math.cos(a), sn = Math.sin(a), w = i % 2 ? 0.8 : 1.2, r0 = 14;
-        P.poly([[ac[0] + c * r0 - sn * w, ac[1] + sn * r0 + c * w], [ac[0] + c * L, ac[1] + sn * L], [ac[0] + c * r0 + sn * w, ac[1] + sn * r0 - c * w]], p2 ? FIRE : GLD);
+      // raggi puliti da 1 px (Bresenham), lunghi e corti alternati, più chiari vicino all'anello
+      for (let i = 0; i < 17; i++) {
+        const a = Math.PI * 0.92 + i / 16 * Math.PI * 1.16, L = i % 2 ? 21 : 26.5, c = Math.cos(a), sn = Math.sin(a);
+        P.line(ac[0] + c * 15.5, ac[1] + sn * 15.5, ac[0] + c * (L - 3), ac[1] + sn * (L - 3), p2 ? FIRE : GLD, i % 2 ? 2 : 3);
+        P.line(ac[0] + c * (L - 3), ac[1] + sn * (L - 3), ac[0] + c * L, ac[1] + sn * L, p2 ? FIRE : GLD, i % 2 ? 1 : 2, {}, true);
+        if (!(i % 2)) P.ell(ac[0] + c * 18, ac[1] + sn * 18, 1.1, 1.1, p2 ? FIRE : GLD, { tone: 3, same: true });
       }
       P.ell(ac[0], ac[1], 15.2, 15.2, p2 ? FIRE : GLD, { clip: (x, y) => y < 33 });
       P.ell(ac[0], ac[1], 14, 14, null);
@@ -454,13 +481,13 @@
       });
       // ---- piviale (mantello) dietro, con bordo d'oro
       const sway = k ? 1 : 0;
-      P.poly([[CX - 13, 32], [CX + 13, 32], [CX + 22, 52], [CX + 25 + sway, 63], [CX + 18, 61], [CX + 10, 64], [CX, 62], [CX - 10, 64], [CX - 18, 61], [CX - 25 - sway, 63], [CX - 22, 52]], cape, { fl: 0.5 });
+      P.poly([[CX - 13, 32], [CX + 13, 32], [CX + 22, 52], [CX + 25 + sway, 64], [CX + 18, 62], [CX + 10, 65], [CX, 63], [CX - 10, 65], [CX - 18, 62], [CX - 25 - sway, 64], [CX - 22, 52]], cape, { fl: 0.5 });
       P.path([[CX - 13, 32], [CX - 22, 52], [CX - 25 - sway, 63]], trim, 2, { keep: true });
       P.path([[CX + 13, 32], [CX + 22, 52], [CX + 25 + sway, 63]], trim, 2, { keep: true });
       P.path([[CX - 16, 41], [CX - 19, 52], [CX - 20, 61]], cape, 1, { keep: true });
       P.path([[CX + 16, 41], [CX + 19, 52], [CX + 20, 61]], cape, 1, { keep: true });
       // ---- alba (svasata) con orlo dorato ondulato
-      P.poly([[CX - 10, 33], [CX + 10, 33], [CX + 16, 50], [CX + 18 - sway, 62], [CX + 12, 64], [CX + 6, 62.5], [CX, 64.5], [CX - 6, 62.5], [CX - 12, 64], [CX - 18 + sway, 62], [CX - 16, 50]], robe, { fl: 0.55 });
+      P.poly([[CX - 10, 33], [CX + 10, 33], [CX + 16, 50], [CX + 18 - sway, 62.5], [CX + 12, 65], [CX + 6, 63.2], [CX, 65.4], [CX - 6, 63.2], [CX - 12, 65], [CX - 18 + sway, 62.5], [CX - 16, 50]], robe, { fl: 0.55 });
       for (const fx of [-11, -6, 6, 11]) P.path([[CX + fx * 0.55, 41], [CX + fx * 0.85, 52], [CX + fx, 61]], robe, 1, { keep: true });
       for (const fx of [-9, -4, 8]) P.path([[CX + fx * 0.6, 45], [CX + fx * 0.9, 56]], robe, 3, { keep: true });
       P.path([[CX - 18 + sway, 62], [CX - 12, 64], [CX - 6, 62.5], [CX, 64.5], [CX + 6, 62.5], [CX + 12, 64], [CX + 18 - sway, 62]], trim, 2, { keep: true });
@@ -556,8 +583,8 @@
     const SHOE = MAT(['#2a0610', '#6a0e1e', '#ae1a26', '#e0383a', '#ff8a7a']);
     const SKIRT = MAT(['#10203a', '#1e3e62', '#2e6488', '#4a90a8', '#7ab8c0']);
     const LACE = MAT(['#6a6a78', '#b8b8c2', '#e8e6e0', '#ffffff']);
-    const VEIN = MAT(['#1e2050', '#34408a', '#5a6ab8', '#8a9ad8']);
-    const BRUISE = MAT(['#2a1a3a', '#4e2a5a', '#7a4a7a', '#9a6a8a']);
+    const VEIN = MAT(['#3a2c60', '#5a5096', '#7a7cbc', '#a2a8da']);
+    const BRUISE = MAT(['#3a1e44', '#5e3268', '#82508a', '#a87a9a', '#c8a08a']);
 
     reg3('mom', 42, 72, (P, k, p2) => {
       const skin = p2 ? LEG2 : LEG;
@@ -589,12 +616,16 @@
       for (const x of [9, 13, 18, 23, 28, 32]) P.px(x, 11 + (x % 2), LACE, 2, { same: true });
       // ---- fase 2: vene varicose bluastre e lividi
       if (p2) {
-        P.path([[16, 13], [17, 18], [15.5, 23], [16.5, 29], [15, 35], [16.5, 41], [16, 46]], VEIN, 1, { keep: true, only: skin });
-        P.path([[17, 18], [19.5, 21], [20, 25]], VEIN, 1, { keep: true, only: skin }); P.path([[16.5, 29], [19, 32], [20, 37]], VEIN, 1, { keep: true, only: skin });
-        for (const [x, y] of [[16, 23], [15, 35], [16, 41]]) P.px(x, y, VEIN, 2, { keep: true });
-        P.path([[24, 14], [23, 19], [25, 23]], VEIN, 1, { keep: true, only: skin });
-        P.ell(22, 17, 2.4, 1.8, BRUISE, { keep: true, only: skin }); P.ell(19.5, 44, 1.8, 2.4, BRUISE, { keep: true, only: skin });
-        P.px(21, 16, BRUISE, 3, { keep: true }); P.px(19, 43, BRUISE, 3, { keep: true });
+        // vene: linee sottili color prugna (non nere), un ramo principale + due rami
+        P.path([[16, 14], [17, 19], [16, 24], [16.5, 29], [15.5, 34], [16.5, 40]], VEIN, 1, { keep: true, only: skin });
+        P.path([[17, 19], [19, 21.5]], VEIN, 2, { keep: true, only: skin }); P.path([[16.5, 29], [18.5, 32], [19, 35]], VEIN, 2, { keep: true, only: skin });
+        P.path([[25, 13], [24, 18], [25, 21]], VEIN, 2, { keep: true, only: skin });
+        // lividi: macchia viola con l'alone giallastro
+        for (const [x, y, rx, ry] of [[22, 16.5, 2.8, 2.1], [27.5, 30, 1.6, 2.2], [19.5, 44, 2, 2.6]]) {
+          P.ell(x, y, rx + 0.8, ry + 0.8, BRUISE, { keep: true, only: skin, tone: 4 });
+          P.ell(x, y, rx, ry, BRUISE, { keep: true, only: [skin, BRUISE], fl: 0.6 });
+          P.px(x - 0.5, y - 0.5, BRUISE, 1, { keep: true });
+        }
         for (const [x, y] of [[28, 66], [33, 68], [18, 62]]) P.px(x, y, SHOE, 1, { keep: true });
       }
     }, false, { top: true }); // la gamba entra dall'alto: niente contorno in cima
@@ -648,8 +679,8 @@
     const ARM = MAT(['#16161f', '#2c2e3c', '#4a4e60', '#727890', '#a4aabb']);
     const ARMD = MAT(['#0e0e16', '#1c1c28', '#2e3040', '#444858']);
     const MAG = MAT(['#4a1e0c', '#9a4a1a', '#d8823a', '#f6b868', '#ffe0a8']);
-    const MACE = MAT(['#0e0c14', '#1e1a28', '#363044', '#56506a', '#827c96']);
-    const HAN = MAT(['#2a160e', '#4e2e1a', '#7a4a2a', '#a06a3c']);
+    const MACE = MAT(['#13111c', '#2c2838', '#524c66', '#857f9c', '#c2bcd4']);
+    const HAN = MAT(['#2a160e', '#5a3418', '#8e5a2c', '#c08a4c']);
     reg2('falseknight', 42, 38, (P, k) => {
       const mu = k ? 2 : 0;
       // gambette tozze
@@ -674,17 +705,19 @@
       P.path([[13, 6], [16, 3.5], [20, 3]], ARM, 4, { keep: true });
       P.path([[12.5, 12], [15, 14.5], [19, 15.5]], ARM, 1, { keep: true });
       // braccio anteriore alzato che regge la mazza
-      P.cap(26, 16, 31, 9 - mu, 2.6, ARM, { r2: 2.3, edge: 1 });
-      // mazza: manico + testa chiodata enorme (la Macebug, con le zampette)
-      const mx = 34.5, my = 7 - mu;
-      P.cap(29.5, 15 - mu, mx - 2, my + 3, 1.3, HAN);
-      P.ell(30.5, 10.5 - mu, 2.8, 2.5, ARMD, { edge: 1 });
-      for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + 0.4; P.poly([[mx + Math.cos(a - 0.32) * 4.8, my + Math.sin(a - 0.32) * 4.8], [mx + Math.cos(a) * 7.4, my + Math.sin(a) * 7.4], [mx + Math.cos(a + 0.32) * 4.8, my + Math.sin(a + 0.32) * 4.8]], MACE, { fl: 0.3 }); }
-      P.ell(mx, my, 5.6, 5.4, MACE);
-      P.path([[mx - 3.5, my - 2], [mx - 1, my - 4], [mx + 2.5, my - 3.5]], MACE, 4, { keep: true });
-      P.path([[mx - 4.5, my + 2], [mx, my + 4], [mx + 4.5, my + 2]], MACE, 1, { keep: true });
-      P.path([[mx - 5, my], [mx + 5, my]], MACE, 2, { keep: true });
-      for (const [dx, d] of [[-3, -1], [0, 0], [3, 1]]) P.line(mx + dx, my + 5.5, mx + dx + d, my + 8 + (k ? 0 : 1), MACE, 1);
+      const mx = 34, my = 8.5 - mu * 0.75;
+      P.cap(26, 16, 29.5, 12.5 - mu, 2.6, ARM, { r2: 2.3, edge: 1 });
+      // mazza: manico di legno (pomolo sotto il pugno) + testa enorme: la Macebug, un insetto
+      // corazzato a placche, con le punte e le zampette
+      P.cap(27.8, 15 - mu, mx - 2.4, my + 2.6, 1.15, HAN);
+      for (const a of [-2.5, -1.6, -0.75, 0.1, 0.95, 2.6]) P.poly([[mx + Math.cos(a - 0.26) * 4.6, my + Math.sin(a - 0.26) * 4.6], [mx + Math.cos(a) * 7.3, my + Math.sin(a) * 7.3], [mx + Math.cos(a + 0.26) * 4.6, my + Math.sin(a + 0.26) * 4.6]], MACE, { tone: 2 });
+      P.ell(mx, my, 5.4, 5.1, MACE, { edge: 1 });
+      P.path([[mx - 3.5, my - 1.5], [mx - 1.5, my - 3.4], [mx + 1.5, my - 3.8]], MACE, 4, { keep: true });         // luce
+      P.path([[mx - 5, my + 1], [mx - 1, my + 0.2], [mx + 2.5, my - 1.4], [mx + 4.5, my - 3]], MACE, 1, { keep: true }); // giunture delle placche
+      P.path([[mx - 3, my + 3.8], [mx + 1.5, my + 2.6], [mx + 4.6, my + 0.5]], MACE, 1, { keep: true });
+      for (const dx of [0.5, 3]) P.px(mx + dx, my + 5.6 + (k ? 0 : 0.6), MACE, 1); // zampette
+      P.ell(30, 12.6 - mu, 2.5, 2.3, ARM, { edge: 1 }); // pugno corazzato
+      P.path([[29, 11.5 - mu], [30.5, 11 - mu]], ARM, 4, { keep: true });
     });
   }
 
@@ -785,11 +818,14 @@
       P.cap(25, 11, 27.5, 16.5, 1.3, SKN);
       P.rect(26, 14.5, 2.5, 1.5, GOLD, { tone: 3 });
       P.ell(28, 17.5, 1.4, 1.3, SKN);
-      P.cap(28, 17, 29.5, 19.5, 0.9, WHIP, { tone: 1 }); // impugnatura
-      const wp = k ? [[29.5, 19.5], [32, 17], [34.5, 18.5], [34, 22.5], [30.5, 24], [29, 27.5], [31.5, 30.5], [34.5, 31]]
-                   : [[29.5, 19.5], [31, 23], [34.5, 23.5], [35, 19.5], [33, 16.5], [30.5, 13.5], [32, 10], [34.5, 9]];
-      P.path(wp, WHIP, 2);
-      P.path(wp.slice(0, 4), WHIP, 3, { keep: true });
+      P.cap(27.5, 16.5, 29.5, 19.5, 0.9, WHIP, { tone: 0 }); // impugnatura di cuoio scuro
+      // frusta continua: _a pende e si arrotola a terra, _b si alza in uno schiocco sopra la testa
+      const wp = k ? [[29.5, 19.5], [31.2, 17.2], [32.6, 14.2], [33.4, 10.8], [33.2, 7.4], [32, 4.6], [30.2, 2.9], [28.2, 2.6]]
+                   : [[29.5, 19.5], [30.6, 22.4], [31.6, 25.4], [32.2, 28.4], [31.6, 30.8], [32.6, 32], [34, 31.4]];
+      for (let i = 0; i < 2; i++) P.cap(wp[i][0], wp[i][1], wp[i + 1][0], wp[i + 1][1], 0.85 - i * 0.15, WHIP, { tone: 2, same: i > 0 });
+      P.path(wp.slice(2), WHIP, 2);
+      P.path(wp.slice(0, 3), WHIP, 3, { keep: true });
+      if (k) { P.px(27, 2, WHIP, 4); P.px(27, 4, WHIP, 3); } // schiocco
     });
   }
 
@@ -804,7 +840,7 @@
     reg2('oshiro', 26, 30, (P, k) => {
       // coda di fantasma che ondeggia
       const tw = k ? 1 : -1;
-      P.poly([[7.5, 19], [17.5, 19], [16.5, 23], [13 + tw, 26], [9 + tw * 2, 28.5], [6.5 + tw * 2, 28.5], [8.5 + tw, 25.5], [8, 22]], GH, { fl: 0.6 });
+      P.poly([[7.5, 19], [17.5, 19], [16.5, 23], [13 + tw, 26], [9.5 + tw * 2, 29.2], [6.5 + tw * 2, 29.2], [8.5 + tw, 25.5], [8, 22]], GH, { fl: 0.6 });
       P.path([[10, 21], [11 + tw, 24.5], [9 + tw * 2, 27]], GH, 4, { keep: true });
       // giacca blu notte
       P.poly([[7, 12], [18, 12], [18.5, 21], [12.5, 22.5], [6.5, 21]], SUIT, { fl: 0.6 });
@@ -818,14 +854,14 @@
       P.cap(8, 13.5, 5, 18 - k, 1.4, SUIT); P.ell(4.5, 18.5 - k, 1.6, 1.5, WHITE);
       P.cap(18, 13.5, 21, 16 + k * 2, 1.4, SUIT); P.ell(21.5, 16.5 + k * 2, 1.6, 1.5, WHITE);
       // testa: calva, ciuffi bianchi, orecchio, occhietti, sopracciglio folto, naso grosso
-      P.ell(12.5, 7, 6.2, 6, GH);
-      P.ell(7, 8.5, 1.6, 2.4, WHITE, { fl: 0.5 }); P.px(8, 5.5, WHITE, 2); P.px(9, 5, WHITE, 3, { same: true });
-      P.ell(9.5, 8, 1.4, 1.8, GH, { edge: 1 });
-      P.line(14, 4.5, 16.5, 5, WHITE, 2, { keep: true });
-      P.px(15.5, 6.5, DARK, 0, { keep: true }); P.px(15.5, 7.5, DARK, 1, { keep: true });
-      P.ell(19.5, 8.5, 3.2, 2.7, GH, { bias: 0.04 }); P.px(19, 7.5, GH, 4, { keep: true });
-      P.line(15, 11, 17.5, 11, GH, 1, { keep: true });
-      P.px(13, 10.5, GH, 1, { keep: true });
+      // testa calva di tre quarti: luce morbida sul viso, nasone tondo, occhietti e sorrisone
+      P.ell(12.5, 7, 6.4, 6, GH, { fl: 0.6, bias: 0.1 });
+      P.ell(6.6, 8.8, 1.9, 2.6, WHITE, { fl: 0.5 }); P.px(7.5, 5.8, WHITE, 2); P.px(8.5, 5.2, WHITE, 3, { same: true }); // ciuffo bianco
+      P.ell(9.2, 8.4, 1.3, 1.7, GH, { edge: 1 }); // orecchio
+      for (const ex of [13.5, 17]) { P.px(ex, 6, DARK, 0, { keep: true }); P.px(ex, 7, DARK, 0, { keep: true }); P.line(ex - 0.6, 4.6, ex + 0.6, 4.6, GH, 1, { keep: true }); }
+      P.ell(17.9, 9, 2.4, 2, GH, { fl: 1, bias: 0.1 }); // nasone tondo che sporge appena dal profilo
+      P.line(16, 10.6, 18.5, 10.6, GH, 1, { keep: true });
+      P.path([[12.5, 10.5], [13.5, 11.8], [15.5, 12.3], [17.5, 12.2], [18.6, 11.4]], DARK, 1, { keep: true }); // sorriso
     });
   }
 
@@ -914,19 +950,20 @@
     const MOUTH = MAT(['#120408', '#2a0810', '#46101c', '#641a28']);
     const TOOTH = MAT(['#6a5a50', '#b8aa98', '#ece2cc', '#ffffff']);
     reg2('monstro', 46, 38, (P, k) => {
-      const sq = k ? 1 : 0, cy = 21 + sq, ry = 15 - sq, rx = 21 + sq * 0.6;
-      P.egg(23, cy, rx, ry, ry - 1.5, 0.05, PINK, { fl: 0.95 });
+      // poggia a terra: il fondo del corpo tocca l'ultima riga (il fotogramma _b si schiaccia dall'alto)
+      const sq = k ? 1 : 0, Y = 2 + sq, cy = 21 + Y, ry = 15.5 - sq, rx = 21 + sq * 0.6;
+      P.egg(23, cy, rx, ry, 14 - sq, 0.05, PINK, { fl: 0.95 });
       // bitorzoli sul profilo superiore
-      for (const [x, y, r] of [[12, 10 + sq, 3.4], [21, 7 + sq, 3.6], [31, 7.5 + sq, 3.4]]) P.ell(x, y, r, r * 0.75, PINK);
+      for (const [x, y, r] of [[12, 10, 3.4], [21, 7, 3.6], [31, 7.5, 3.4]]) P.ell(x, y + Y - sq * 0.5, r, r * 0.75, PINK);
       P.ell(23, cy - 4, rx - 3, ry - 6, PINK, { fl: 0.7 });
       // macchie e pustole
-      for (const [x, y, r] of [[8, 22, 1.6], [12, 14, 1.1], [38, 24, 1.8], [33, 13, 1.2], [40, 17, 1], [6, 27, 1.2], [36, 30, 1.2], [19, 10, 1]]) { P.ell(x, y + sq, r, r * 0.8, PINK, { keep: true, tone: 1 }); P.px(x - 0.5, y - 0.5 + sq, PINK, 3, { keep: true }); }
+      for (const [x, y, r] of [[8, 22, 1.6], [12, 14, 1.1], [38, 24, 1.8], [33, 13, 1.2], [40, 17, 1], [6, 27, 1.2], [36, 30, 1.2], [19, 10, 1]]) { P.ell(x, y + Y, r, r * 0.8, PINK, { keep: true, tone: 1 }); P.px(x - 0.5, y - 0.5 + Y, PINK, 3, { keep: true }); }
       // occhietti
-      for (const x of [17, 31]) { P.ell(x, 15 + sq, 2.6, 2.4, DARK, { keep: true, tone: 0 }); P.px(x - 1, 14 + sq, TOOTH, 2, { keep: true }); }
-      P.path([[13.5, 11.5 + sq], [16, 12 + sq], [19.5, 11 + sq]], PINK, 1, { keep: true });
-      P.path([[28.5, 11 + sq], [32, 12 + sq], [34.5, 11.5 + sq]], PINK, 1, { keep: true });
+      for (const x of [17, 31]) { P.ell(x, 15 + Y, 2.6, 2.4, DARK, { keep: true, tone: 0 }); P.px(x - 1, 14 + Y, TOOTH, 2, { keep: true }); }
+      P.path([[13.5, 11.5 + Y], [16, 12 + Y], [19.5, 11 + Y]], PINK, 1, { keep: true });
+      P.path([[28.5, 11 + Y], [32, 12 + Y], [34.5, 11.5 + Y]], PINK, 1, { keep: true });
       // boccone con labbra carnose
-      const my = 25 + sq, mh = k ? 3.6 : 4.6;
+      const my = 25 + Y, mh = k ? 3.6 : 4.6;
       P.ell(24, my, 13, mh + 2.6, LIP, { fl: 0.8 });
       P.ell(24, my, 11, mh, MOUTH, { keep: true });
       P.path([[13, my - 3], [18, my - 5.5], [24, my - 6], [30, my - 5.5], [35, my - 3]], LIP, 4, { keep: true });
@@ -972,7 +1009,7 @@
       P.ell(9, 13, 6, 5, MUS, { edge: 2 }); P.ell(31, 13, 6.4, 5.2, MUS, { edge: 2 });
       // testolina nell'elmo di ferro con fessura rovente
       P.ell(21, 8.5, 5.2, 5.4, IRON);
-      P.rect(16, 7.4, 10.5, 2, VIS);
+      P.rect(16.8, 7.4, 9, 1.8, VIS, { keep: true }); // fessura rovente dentro l'elmo (non una fascia che sborda)
       P.line(18, 4.5, 24, 4.5, IRON, 4, { keep: true });
       for (const x of [17.5, 24.5]) P.px(x, 11.5, IRON, 4, { keep: true });
       P.rect(16.5, 11, 9, 2.2, IRON, { fl: 0.3 }); // gorgiera

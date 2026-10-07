@@ -1133,3 +1133,23 @@ Si caricano uccidendo, infliggendo e subendo danno; si usano con **E** (pad **Y*
 - **In basso a sinistra:** il ritratto, con l'anello dell'Ultimate e il badge del tasto.
 - **Level-up:** le carte sono etichettate «ARMA» (oro) o «SUPPORTO» (verde acqua), coerenti con l'HUD.
 - **Co-op:** un pannello compatto per giocatore con il suo colore, l'etichetta P1–P4 sopra ogni eroe e l'anello colorato ai piedi.
+
+### 12.10 Arte dell'Alfa 0.4
+- **Eroi dai riferimenti forniti:** Cavaliere, Madeline (con le varianti dei capelli blu e rosa e con Badeline), Isaac, Prigioniero e Penitente sono stati ricalcati a risoluzione nativa dalle immagini di riferimento dell'utente, poi puliti e animati:
+  - respiro;
+  - battito di ciglia;
+  - camminata a 4 fotogrammi;
+  - fotogramma di danno.
+  
+  Il Prigioniero ha una fiamma alternata, una versione senza testa e la testa-Omuncolo separata. Badeline ha i capelli fluttuanti e non ha lo zaino.
+- **Zagreus e il Terrariano:** ridisegnati nello stesso stile. Zagreus ha i piedi in fiamme animati.
+- **Metadati `HERO_META`:** la mano e la testa di ogni eroe. L'arma impugnata, gli accessori di Isaac e la luce della fiamma del Prigioniero si agganciano lì.
+- **Boss:** ridisegnati con due fotogrammi di idle e un aspetto di seconda fase. Sono Hollow Knight, Gabriele, Ade, Mano del Re, Escribar, Signore della Luna (con le mani sugli stessi punti delle hitbox), Mamma, l'occhio di Mamma e la Cucitrice.
+- **Mini-boss:** ridisegnati il Falso Cavaliere, lo Swordsmachine, Megera, il signor Oshiro, Ten Piedad, l'Occhio di Cthulhu, Monstro e il Concierge.
+- **Oggetti e icone:**
+  - frammenti a 4 grandezze per ogni valuta;
+  - 8 oggetti speciali;
+  - 9 oggetti distruttibili con fiamma animata;
+  - icone delle 8 Ultimate;
+  - 18 icone dei potenziamenti della Merceria.
+- **Metodo:** per ogni foglio un artista ha disegnato e un direttore artistico indipendente ha confrontato il risultato con i riferimenti e con le descrizioni ufficiali, poi l'ha corretto.

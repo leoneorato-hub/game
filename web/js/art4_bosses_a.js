@@ -261,7 +261,8 @@
   {
     const SHELL = MAT(['#7c788c', '#b9b6c4', '#e4e2ea', '#fbfbfd']);
     const VOID = MAT(['#060509', '#110f17', '#1e1b28', '#302b3e']);
-    const CLOAK = MAT(['#24262c', '#3d4047', '#5d6168', '#81858b', '#a9adb1']);
+    // mantello grigio scuro con una punta di verde (il Vaso Puro ce l'ha grigio chiaro)
+    const CLOAK = MAT(['#242b2e', '#374144', '#4f5a57', '#6d7972', '#949f96']);
     const INF = MAT(['#7a2406', '#d0520e', '#ff8a1e', '#ffc04a', '#fff2c0'], { glow: true, ol: '#4a1606' });
     const IRON = MAT(['#24242e', '#4c4e5c', '#7c8092', '#b0b4c2']);
     // testa disegnata a mano (21x27): corna lunghe e affilate che si aprono verso
@@ -306,16 +307,18 @@
     };
     const BM = { a: [INF, 1], b: [INF, 2], c: [INF, 3], d: [INF, 4] };
     const blob = (P, x, y, n) => P.stamp(Math.round(x - n / 2), Math.round(y - n / 2), BL[n], BM);
-    // catena a maglie: anello (rombo con foro) + maglia di taglio, l'ultima spezzata
-    const RING = ['.o.', 'o.o', 'o.o', '.o.'], BAR = ['.i.', '.i.', '.i.'], OPEN = ['.o.', 'o.o', 'o..'];
+    // catena a maglie che pende FUORI dalla sagoma (il foro resta d'inchiostro):
+    // anello di fronte (luce in alto a sinistra) + maglia di taglio, l'ultima spezzata
+    const RING = ['.a.', 'a.b', 'b.c', '.c.'], BAR = ['b', 'c'], OPEN = ['.a.', 'a.b', 'b..'];
+    const CM = { a: [IRON, 3], b: [IRON, 2], c: [IRON, 1] };
     const chain = (P, x, y, n, dx = 0) => {
       let yy = y, xx = x;
       for (let i = 0; i < n; i++) {
         const last = i === n - 1;
-        P.stamp(Math.round(xx) - 1, yy, last ? OPEN : RING, { o: [IRON, 3] });
+        P.stamp(Math.round(xx) - 1, yy, last ? OPEN : RING, CM);
         if (last) break;
-        P.stamp(Math.round(xx + dx / 2) - 1, yy + 3, BAR, { i: [IRON, 1] });
-        yy += 5; xx += dx;
+        P.stamp(Math.round(xx + dx / 2), yy + 4, BAR, CM);
+        yy += 6; xx += dx;
       }
     };
     reg3('hollowknight', 48, 60, (P, k, p2) => {
@@ -326,18 +329,18 @@
       P.cap(27, 43, 27.5, 56.5, 1.4, VOID, { r2: 1 });
       P.poly([[18, 56], [21.6, 55.6], [21.8, 58.6], [17, 58.6]], VOID, { tone: 2 });
       P.poly([[26.4, 55.6], [30, 56], [31, 58.6], [26.2, 58.6]], VOID, { tone: 2 });
-      // mantello, telo posteriore a brandelli
-      P.poly([[17, 27 + y], [31, 27 + y], [35, 35], [36.5, 46], [34 + sw, 45], [33.5, 50], [30.5 - sw, 46.5], [28.5, 49], [26, 46], [23.5 + sw, 50], [21, 46], [18.5, 49.5], [16 - sw, 45.5], [14, 50], [12, 44], [13, 35]], CLOAK, { bias: -0.1 });
+      // mantello, telo posteriore: più stretto e a lunghi brandelli verticali
+      P.poly([[17, 27 + y], [31, 27 + y], [34, 34], [35.2, 43], [35.2, 50], [33.8 - sw, 47], [32.5, 52.5], [31, 47.5], [29.5, 50], [27.5, 46.5], [25.5, 51], [23.5, 46.5], [21.5, 50.5], [19.5, 47], [17.5 + sw, 52.5], [15.8, 47.5], [14, 50.5], [13.8, 43], [14.6, 34]], CLOAK, { bias: -0.1 });
       // busto del vaso (nero), visibile nell'apertura
-      P.egg(24.3, 34 + y, 4.8, 7, 11, 0.35, VOID, { fl: 0.7 });
+      P.egg(24.3, 34 + y, 4.6, 7, 11, 0.35, VOID, { fl: 0.7 });
       // lembo sinistro (copre il moncherino del braccio perduto)
-      P.poly([[15.5, 27.5 + y], [22, 27 + y], [21.5, 34 + y], [20.5, 42], [19 + sw, 48], [17, 44.5], [14.5, 48.5], [13, 42], [13.3, 33]], CLOAK, { edge: 1, bias: 0.06 });
+      P.poly([[16, 27.5 + y], [22, 27 + y], [21.5, 34 + y], [20.6, 42], [19.6 + sw, 49.5], [17.8, 45.5], [16.2, 51], [14.4, 44], [14.6, 33]], CLOAK, { edge: 1, bias: 0.06 });
       // lembo destro (dietro al braccio)
-      P.poly([[27.5, 27 + y], [32.5, 28 + y], [35, 34], [35.5, 43], [33.5 + sw, 47.5], [31.5, 44], [29, 46.5], [29.2, 37]], CLOAK, { edge: 1, bias: -0.04 });
-      // pieghe (poche, lunghe)
-      P.line(17.5, 31 + y, 16, 44, CLOAK, 1, { keep: true });
-      P.line(33, 35, 33.5, 43, CLOAK, 1, { keep: true });
-      P.line(14.5, 31 + y, 14, 40, CLOAK, 4, { keep: true });
+      P.poly([[27.5, 27 + y], [32, 28 + y], [34.2, 34], [34.8, 43], [33.4 + sw, 48.5], [31.6, 44.5], [29.4, 47], [29.2, 37]], CLOAK, { edge: 1, bias: 0.12 });
+      // pieghe (poche, lunghe) e un filo di luce sul bordo sinistro
+      P.line(18, 31 + y, 17, 45, CLOAK, 1, { keep: true });
+      P.line(32.5, 35, 33, 44, CLOAK, 1, { keep: true });
+      P.line(15, 31 + y, 14.8, 42, CLOAK, 4, { keep: true });
       // colletto sulle spalle
       P.ell(24, 27.5 + y, 8.5, 2.4, CLOAK, { edge: 1, fl: 0.5, bias: 0.04 });
       P.ell(24, 26 + y, 3.4, 1.4, VOID, { tone: 0 });
@@ -346,13 +349,16 @@
         ? [[24.5, 35, 6], [22, 41, 4], [27.5, 41.5, 3], [24, 30.5, 3], [19.5, 37, 2], [16, 40, 3], [33, 31, 2], [26, 46, 2], [15, 46.5, 2], [33.5, 44, 3], [29.5, 31.5, 2]]
         : [[24.5, 35.5, 5], [22.5, 41, 3], [27.5, 41.5, 2]];
       for (const [bx, by, n] of blobs) blob(P, bx, by + (by < 44 ? y : 0), n);
-      // braccio destro sottile che esce dal mantello (regge l'Aculeo, perno ~ (30, 39))
-      P.cap(29.5, 30 + y, 31, 37, 1.3, VOID, { edge: 2, r2: 1.1 });
+      // unico braccio, sottile e piegato: il gomito sporge dalla sagoma del mantello,
+      // la mano regge l'Aculeo (disegnato dal gioco con perno ~ (30, 39))
+      P.cap(30.5, 29.5 + y, 33.6, 33.6, 1.25, VOID, { edge: 0, r2: 1.1 });
+      P.cap(33.6, 33.6, 31.4, 37.6, 1.1, VOID, { edge: 0, same: true });
+      P.line(30, 30 + y, 32.6, 33, VOID, 3, { keep: true });                 // luce sul braccio
       P.ell(31, 38.6, 1.9, 1.7, VOID, { tone: 3 });
-      P.rect(29.4, 35, 3.6, 1.1, IRON, { tone: 3 }); P.px(32, 36, IRON, 1, { keep: true });  // manetta
-      // catene spezzate: dal moncherino sinistro e dalla manetta
-      chain(P, 11.5, 29 + y, 3, -0.5);
-      chain(P, 34.5, 37, 2, 0.8);
+      P.stamp(31, 35, ['abb', '.cc'], CM);                                    // manetta
+      // catene spezzate: dal moncherino sinistro e dalla manetta, fuori dalla sagoma
+      chain(P, 14.6, 27 + y, 3, -1.6);
+      chain(P, 36.6, 37, 2, 0.5);
       // testa
       const HX = 14, HY = 1 + y;
       P.stamp(HX, HY, HEAD, HM);
@@ -408,12 +414,14 @@
       // aureola
       P.ell(31, 4 + y, 7, 2.4, LB); P.ell(31, 4 + y, 4.6, 0.9, null);
       // due spade nel fodero sul fianco ("Lo Splendore è Giustizia")
-      for (const [x0, y0, x1, y1] of [[25, 35, 16.5, 46], [26.5, 36, 19, 48]]) {
-        P.cap(x0, y0, x1, y1, 1.25, LEATH, { edge: 1 });
-        P.line(x0 - 1, y0, x1 - 0.5, y1 - 1, G, 2, { keep: true });
-        P.px(x1, y1, G, 3, { keep: true });
-        P.line(x0 + 1, y0 - 2, x0 + 3, y0 - 5, A, 4);                 // impugnatura
-        P.line(x0 - 0.5, y0 - 2.5, x0 + 2, y0 - 1, G, 3, { same: true }); // guardia
+      // foderi ornati bianchi con bocchetta e puntale d'oro, appesi quasi in verticale
+      const SC = p2 ? LEATH : VISOR;
+      for (const [x0, y0, x1, y1] of [[24.2, 34.5, 19.2, 49], [26.2, 35, 22.4, 50.5]]) {
+        P.cap(x0, y0, x1, y1, 1.15, SC, { edge: 1, r2: 1 });
+        P.line(x0 - 1, y0 + 1, x1 - 1, y1 - 1, SC, 3, { keep: true });
+        P.ell(x1, y1 + 0.3, 1.3, 1.3, G, { edge: 1 });
+        P.line(x0 - 1.2, y0 + 3.4, x0 + 1.2, y0 + 4.2, G, 3, { keep: true });
+        P.line(x0 - 1.6, y0 + 8.4, x0 + 0.6, y0 + 9.2, G, 2, { keep: true });
       }
       // gambe
       P.cap(27.5, 38, 26.5, 47, 2.6, A, { edge: 1 }); P.cap(34.5, 38, 35.5, 47, 2.6, A, { edge: 1 });
@@ -505,26 +513,23 @@
       P.poly([[24, 41], [32, 41], [34.3, 62.2], [21.7, 62.2]], BLK, { edge: 1 });
       P.line(24, 42, 22, 61, GOLD, 3, { keep: true }); P.line(32, 42, 34, 61, GOLD, 2, { keep: true });
       hemTrim(P, ROBE, GOLD, 3);
-      // piedi nudi che ardono e bruciano il suolo
-      const FOOT = ['..ss...', '.sbbs..', 'sbbbbbs', 'bbbbbbs'];
-      const FB = glowOf(FIRE, 2);
-      for (const [fx, d] of [[23, -1], [33, 1]]) {
-        flame(P, fx - 3.4, 65, 5 + (k ? 1 : 0), 1.3, FB, -0.9); flame(P, fx + 3.4, 65, 5 + (k ? 0 : 1), 1.3, FB, 0.9);
-        P.ell(fx, 64.3, 5, 1.2, FB);
-        P.stamp(Math.round(fx) - 3, 61, d < 0 ? FOOT.map(r => [...r].reverse().join('')) : FOOT, { s: [SKIN, 1], b: [SKIN, 3] }, { edge: 1 });
-        P.px(fx - 2, 64, FIRE, 4); P.px(fx + 1, 64, FIRE, 4);
+      // piedi in sandali con lacci d'oro (i piedi che ardono sono di Zagreus, non di Ade)
+      const FOOT = ['.sss...', 'sbbbbs.', 'GgggggS', 'dddddds'];
+      for (const [fx, d] of [[22.5, -1], [33.5, 1]]) {
+        P.stamp(Math.round(fx) - 3, 61, d < 0 ? FOOT.map(r => [...r].reverse().join('')) : FOOT,
+          { s: [SKIN, 1], b: [SKIN, 3], d: [SKIN, 2], G: [GOLD, 4], g: [GOLD, 3], S: [GOLD, 1] }, { edge: 1 });
       }
       // cintura con fibbia a teschio e gemma
       P.rect(12.5, 39, 31, 2.6, GOLD, { edge: 1 });
-      P.stamp(25.5, 37, ['.bbb.', 'bkbkb', 'bbrbb', '.bkb.'], { b: [BONE, 3], k: [BLK, 0], r: [EYE, 2] }, { edge: 1 });
+      P.stamp(25.5, 37, ['.bbb.', 'bkbkb', 'bbrbb', '.bkb.'], { b: [GOLD, 4], k: [BLK, 0], r: [EYE, 2] }, { edge: 0 });
       // braccio sinistro
       P.cap(14, 27 + y, 11, 37 + y, 3.6, SKIN, { edge: 1 });
       P.cap(11, 37 + y, 11, 45, 3.2, SKIN, { edge: 1 });
       P.rect(7.6, 39.5, 6.8, 3.2, GOLD, { edge: 1 }); P.px(11, 41, EYE, 2);
       P.ell(11, 47.5, 3, 2.8, SKIN, { edge: 1 });
       // spallaccio a teschio d'oro sulla spalla sinistra
-      P.ell(15.5, 27 + y, 6.4, 2.6, GOLD, { edge: 1 });
-      P.stamp(11, 19 + y, SKULL, { B: [BONE, 3], b: [BONE, 2], s: [BONE, 1], k: [BLK, 0] });
+      P.ell(15.5, 27 + y, 6.4, 2.6, BLK, { edge: 1 }); P.line(10, 28 + y, 21, 28 + y, GOLD, 2, { keep: true });
+      P.stamp(11, 19 + y, SKULL, { B: [GOLD, 4], b: [GOLD, 3], s: [GOLD, 1], k: [BLK, 0] }, { edge: 0 });
       P.px(13, 22 + y, EYE, p2 ? 3 : 2, { keep: true }); P.px(17, 22 + y, EYE, p2 ? 3 : 2, { keep: true });
       P.px(10, 27 + y, EYE, 2); P.px(21, 27 + y, EYE, 2);
       // Varatha, la Lancia Eterna
@@ -616,7 +621,11 @@
       P.rect(6.6, 37 + y, 6.8, 2, GOLD, { edge: 1 });
       P.ell(10, 41.5 + y, 3.6, 3.2, S, { edge: 1 });
       // lancia gigante
-      P.cap(51, 18, 51, 62.5, 1.3, WOOD);
+      P.cap(51, 18, 51, 56, 1.3, WOOD);
+      // lancia simmetrica: seconda punta, più corta, in basso
+      P.poly([[49, 55.6], [53, 55.6], [52.4, 59.5], [51, 62.6], [49.6, 59.5]], SILVER, { edge: 1 });
+      P.line(51, 56, 51, 61, SILVER, 1, { keep: true });
+      P.rect(48.6, 54.4, 4.8, 1.6, GOLD, { edge: 1 });
       P.poly([[51, 0.5], [54.8, 7], [54.2, 13], [51, 16], [47.8, 13], [47.2, 7]], SILVER, { edge: 1 });
       P.line(51, 3, 51, 14, SILVER, 1, { keep: true }); P.line(50, 5, 50, 12, SILVER, 4, { keep: true });
       P.rect(47.2, 15.6, 7.6, 2, GOLD, { edge: 1 });
@@ -631,6 +640,8 @@
         P.ell(sx, 21.2 + y, 8.2, 6.2, GOLD, { edge: 1 });
         P.ell(sx, 20.4 + y, 7.8, 5.6, S, { same: true });
         P.px(sx - 3, 17 + y, S, 4);
+        // lama sovrapposta: solco scuro ad arco + riflesso sul bordo della lama sotto
+        for (let x = Math.ceil(sx - 7); x <= sx + 7; x++) { const t = (x - sx) / 7.8, yy = 21.6 + y + t * t * 3.2; P.px(x, yy, S, 0, { keep: true }); P.px(x, yy + 1, S, x < sx ? 3 : 2, { keep: true }); }
       }
       // gorgiera ed elmo a corona
       P.ell(29, 18 + y, 5.4, 2.6, GOLD, { edge: 1 });
@@ -665,11 +676,17 @@
     const THR = MAT(['#a85a10', '#e8a020', '#ffd23f', '#fff09a', '#ffffff'], { glow: true, ol: '#4a2208' });
     const LOOSE = MAT(['#a85a10', '#e8a020', '#ffd23f', '#fff09a', '#ffffff'], { glow: true, noOl: true });
     const PIN = MAT(['#2e3246', '#555b72', '#8a90a6', '#bcc2d2', '#eef0f6'], { noOl: true });
-    // cucitura "a toppa": linea scura con punti d'oro perpendicolari
-    const seam = (P, x0, y0, x1, y1, R, G, t) => {
-      P.line(x0, y0, x1, y1, R, 0, { keep: true });
-      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)), L = Math.hypot(x1 - x0, y1 - y0) || 1, nx = -(y1 - y0) / L, ny = (x1 - x0) / L;
-      for (let i = 1; i < n; i += 3) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; P.px(x + nx, y + ny, G, t, { keep: true }); P.px(x - nx, y - ny, G, t - 1, { keep: true }); }
+    // toppe di stoffa diversa ricucite sulla veste: tessuto + punto filza d'oro sul bordo
+    const PATCH = MAT(['#2a1030', '#4a1e48', '#6e3262', '#94507e', '#b8789a']);
+    const PATCHB = MAT(['#141436', '#24265a', '#383c80', '#5058a0', '#7480bc']);
+    const PATCH2 = MAT(['#2c0c22', '#521838', '#7a2850', '#a44468', '#c86e88']);
+    const PATCHB2 = MAT(['#1c1030', '#302050', '#483474', '#62509a', '#8274b8']);
+    const patch = (P, pts, PM, G, t) => {
+      P.poly(pts, PM, { keep: true, tone: 2 }); P.line(pts[0][0] + 1, pts[0][1] + 1, pts[1][0] - 1, pts[1][1] + 1, PM, 3, { keep: true });
+      for (let i = 0; i < pts.length; i++) {
+        const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length], n = Math.round(Math.max(Math.abs(bx - ax), Math.abs(by - ay)));
+        for (let j = 0; j < n; j += 2) P.px(ax + (bx - ax) * j / n, ay + (by - ay) * j / n, G, t - (j % 4 ? 1 : 0), { keep: true });
+      }
     };
     reg3('cucitrice', 56, 66, (P, k, p2) => {
       const R = p2 ? ROBE2 : ROBE, SEAM = p2 ? THR : GOLD, y = k, sw = k ? 1 : 0;
@@ -691,9 +708,8 @@
       P.line(28, 26 + y, 28, 63, R, 0, { keep: true });
       for (let yy = 27 + y; yy < 63; yy += 3) { P.px(27, yy, SEAM, 3, { keep: true }); P.px(29, yy + 1, SEAM, 2, { keep: true }); }
       // toppe cucite sulla veste
-      seam(P, 16, 52, 26, 46, R, SEAM, p2 ? 3 : 3);
-      seam(P, 31, 44, 41, 51, R, SEAM, p2 ? 3 : 3);
-      seam(P, 21, 33, 26, 38, R, SEAM, 3);
+      patch(P, [[17, 49.5], [23.5, 48.5], [24.5, 56], [18, 57]], p2 ? PATCH2 : PATCH, SEAM, 3);
+      patch(P, [[32.5, 46], [39, 47.5], [38.5, 54], [32, 53]], p2 ? PATCHB2 : PATCHB, SEAM, 3);
       if (p2) {
         // la veste si scuce: fili sciolti che pendono dall'orlo, strappi luminosi
         for (const [tx, ty, l, c] of [[9, 58, 6, 1], [12, 57, 7, -1], [16, 59, 5, 1], [20, 58, 6, 0], [25, 60, 4, 1], [31, 60, 4, -1], [35, 58, 7, 1], [39, 59, 5, 0], [43, 57, 7, -1], [47, 58, 5, 1]]) {
@@ -708,6 +724,7 @@
       P.line(20, 28 + y, 17, 40 + y, R, 1, { keep: true }); P.line(36, 28 + y, 39, 40 + y, R, 1, { keep: true });
       P.ell(16.8, 42.6 + y, 3.4, 1, R, { tone: 0, keep: true }); P.ell(39.2, 42.6 + y, 3.4, 1, R, { tone: 0, keep: true });
       P.line(12.5, 42 + y, 21.5, 41 + y, SEAM, 3, { keep: true }); P.line(34.5, 41 + y, 43.5, 42 + y, SEAM, 3, { keep: true });
+      patch(P, [[16.5, 30.5 + y], [20.5, 30 + y], [20.2, 35 + y], [16, 35.5 + y]], p2 ? PATCH2 : PATCH, SEAM, 3);
       // mani di porcellana con dita ad ago
       for (const s of [-1, 1]) {
         const hx = 28 + s * 11.5, hy = 44 + y;
@@ -717,7 +734,6 @@
         });
         P.ell(hx, hy, 2, 1.7, PORC, { edge: 1 });
       }
-      P.line(28 - 11.5 - 9.5, 44 + y + 7, 28 - 11.5 - 11, 44 + y + 12, THR, 3); P.px(28 - 11.5 - 10, 44 + y + 14, THR, 2);
       // colletto rigido bordato d'oro
       P.poly([[20.5, 20 + y], [35.5, 20 + y], [34, 26 + y], [28, 28.5 + y], [22, 26 + y]], R, { edge: 1, bias: 0.15 });
       P.line(22, 26 + y, 28, 28 + y, SEAM, 3, { keep: true }); P.line(34, 26 + y, 28, 28 + y, SEAM, 2, { keep: true });
@@ -729,8 +745,8 @@
       const eye = p2 ? [THR, 4] : [GOLD, 3];
       P.stamp(24, 11 + y, ['bcb', 'cgc', 'bcb'], { b: [BTN, 0], c: [BTN, 2], g: eye });
       P.stamp(29, 11 + y, ['bcb', 'cgc', 'bcb'], { b: [BTN, 0], c: [BTN, 2], g: eye });
-      // bocca cucita a punto croce
-      P.stamp(25, 16 + y, ['.s.s.s.', 'ttttttt', '.s.s.s.'], { s: [STITCH, 2], t: [STITCH, 0] }, { keep: true });
+      // bocca cucita con un grande punto a croce rosso (la X della Cucitrice)
+      P.stamp(26, 15 + y, ['a...b', '.a.b.', '..c..', '.b.c.', 'b...c'], { a: [STITCH, 2], b: [STITCH, 1], c: [STITCH, 0] }, { keep: true });
       if (p2) {
         P.line(28, 7 + y, 27, 9 + y, THR, 3); P.line(27, 9 + y, 28, 11 + y, THR, 4, { same: true }); P.px(26, 20 + y, THR, 2);
         P.aura = '#6a2a10';
