@@ -49,7 +49,7 @@ function nextLoop() {
   if ((G.loop - 1) % G.order8.length === 0) G.order8 = endlessOrder(null);
   const id = G.order8[(G.loop - 1) % G.order8.length];
   G.segStart = G.t; G.segKills = G.elitesKilled;
-  Object.assign(G, { firedElite: [], bossE: null, won: false, winT: undefined, afterWin: false, bossWarn: false, contE: null, titleCard: null, event: null, evT: 35, teles: [], eprojs: [], zones: [], intruders: null, hordeT: 100, arena: null, spawnMul: 1, xpEventMul: 1 });
+  Object.assign(G, { firedElite: [], bossE: null, won: false, winT: undefined, afterWin: false, bossWarn: false, contE: null, titleCard: null, event: null, evT: 35, teles: [], eprojs: [], zones: [], bhz: [], bshock: [], bdoors: [], intruders: null, hordeT: 100, arena: null, spawnMul: 1, xpEventMul: 1 });
   for (const e of G.enemies) e.dead = true;
   G.enemies = [];
   G.stage = STAGES[id];

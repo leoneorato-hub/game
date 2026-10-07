@@ -1153,3 +1153,105 @@ Si caricano uccidendo, infliggendo e subendo danno; si usano con **E** (pad **Y*
   - icone delle 8 Ultimate;
   - 18 icone dei potenziamenti della Merceria.
 - **Metodo:** per ogni foglio un artista ha disegnato e un direttore artistico indipendente ha confrontato il risultato con i riferimenti e con le descrizioni ufficiali, poi l'ha corretto.
+
+## 13. Alfa 0.5 — Boss a fasi, bilanciamento e nuove icone
+
+### 13.1 Bilanciamento delle armi
+- **Mischia più generosa:** portata e arco più ampi per Aculeo, Stygius, Spada Arrugginita, Mea Culpa e Spada Corta. La curva di danno dell'Aculeo sale con i livelli.
+- **Madeline:** lo Scatto mira da solo al nemico vicino (anche da ferma) e all'arrivo esplode in un piccolo impatto.
+- **Isaac:** le lacrime hanno una leggera ricerca del bersaglio, così non mancano più chi sta in diagonale.
+- **Discesa Desolata:** il suo danno ora è attribuito correttamente e costa di più. Prima era una fonte "nascosta" da ~320 DPS.
+- **Armi deboli rinforzate:** Theo, Badeline, Minishark e Apicoltore.
+- **Armi "da folla" contro i boss:** incantesimi del Cavaliere, preghiere del Penitente e rotazioni contano un boss, un mini-boss o un punto debole come una piccola folla. I Verdiales si orientano verso il nemico più temibile.
+- **Banco di prova:** uno script misura i DPS di ogni personaggio contro un'orda e contro un bersaglio singolo, con l'arma iniziale e con il kit completo.
+
+### 13.2 Cura di V1
+Il sangue non cura più all'istante. Riempie una **riserva** (massimo 30, barra «SANGUE» nell'HUD) che si converte in vita al massimo a 10 PV al secondo, e solo dai nemici vicini. Il Danno Duro resta un tetto. Il cibo diventa «sangue rappreso» che va nella riserva.
+
+### 13.3 Oggetti a terra
+- I drop casuali dai nemici sono al massimo **uno ogni 25 s**.
+- Gli oggetti distruttibili compaiono più di rado (al massimo 4, uno ogni 7 s) e lasciano più spesso frammenti che oggetti.
+- I pickup lampeggiano e poi spariscono dopo un po'.
+
+### 13.4 Boss a fasi
+Ogni boss di fine capitolo ha **tre fasi** (soglie al 66% e al 33% di vita); ogni mini-boss ne ha **due** (al 50%).
+
+**Il cambio di fase:**
+- il boss diventa invulnerabile per un istante e respinge chi è vicino;
+- spariscono i proiettili nemici e i nemici comuni attorno;
+- il boss pronuncia la sua battuta;
+- compare il titolo «FASE n DI 3» con il nome della fase (per i mini-boss, un banner).
+
+Ogni fase ha la sua aura, il suo ritmo e il suo repertorio di attacchi. Un colpo enorme non può far saltare una fase: la vita si ferma alla soglia.
+
+**Nuovi mattoni degli attacchi** (tutti telegrafati):
+- **Bersagli e minacce sul campo:**
+  - muri di proiettili con un varco segnato in oro;
+  - anelli di lame che si chiudono sul giocatore, con un varco;
+  - onde d'urto ad anello con varchi;
+  - pozze ostili che restano a terra (fuoco, sangue, luce, Infezione, polvere, luna).
+- **Attacchi del boss:**
+  - **Purificazione:** lo schermo diventa rosso tranne alcuni cerchi sicuri, uno vicino a ogni giocatore;
+  - fasci multipli che ruotano;
+  - parata con contrattacco circolare;
+  - scudo frontale da aggirare.
+- **Alleati e bersagli secondari del boss:**
+  - **punti deboli:** il boss è protetto finché non li distruggi;
+  - riflessi e servitori con un proprio copione;
+  - **inseguitrici** che ripercorrono il tuo stesso percorso;
+  - le porte della Mamma, con occhio che spara e mano che afferra.
+- **Arena che si stringe.**
+
+| Boss | Fase 1 | Fase 2 | Fase 3 |
+|---|---|---|---|
+| Il Cavaliere Cavo | **Il Vaso Puro**: combo d'Aculeo, parata | **Le Catene si Spezzano**: spine d'Infezione, pozze, Concentrazione ad area | **La Luce Radiosa**: si trafigge (vulnerabile), muri di spade di luce, tre fasci rotanti |
+| Gabriele | **Giudice dell'Inferno**: combo in tre tempi, lance incrociate | **Spade dello Spirito**: anello di spade, giavellotto che esplode | **Apostata dell'Odio** (aspetto rosso): croce di fasci mentre insegue, muri di lance, doppio anello |
+| Ade | **Signore dei Morti**: lancia rotante, anime che inseguono | **Le Urne del Tartaro**: tre urne gli girano intorno e lo proteggono; agguati invisibili | **L'Ira del Padre**: bidente che incendia il suolo, triplo agguato, anello di teschi |
+| Badeline | **Riflesso**: raffiche e laser | **Specchi**: tre riflessi che sparano laser (solo una è vera), fuoco incrociato | **Il Picco**: inseguitrici sul tuo percorso, stella di laser, anello di cristalli |
+| La Mano del Re | **Guardiano del Trono**: scudo frontale (colpiscilo alle spalle), carica | **Per il Re!**: bombe incendiarie, lancia di fuoco, scudo che spara fiamme | **L'Ultimo Giuramento**: triplo schianto con onde d'urto, cerchio di fuoco con varco, muri di fiamme |
+| Escribar | **L'Ultimo dei Supremi**: pioggia di luce, sangue | **Penitenza**: purificazione con cerchi di luce, croce di luce rotante | **La Mostruosità Santa** (forma rossa): corona di spine, raggio enorme, muri di sangue |
+| Il Signore della Luna | **Il Risveglio**: tre occhi da distruggere (mani e fronte) prima di poter colpire il corpo | **Il Cuore Esposto**: Veri Occhi di Cthulhu in orbita, raggio della morte dal petto | **Il Signore della Luna**: due raggi opposti rotanti, spirali di dardi, pioggia lunare |
+| La Mamma | **La Mamma**: pestoni, porte con occhio e mano che afferra (occhio e mano si possono colpire) | **ISAAC!**: tre pestoni con chiazze di sangue, tutte e quattro le porte | **Il Cuore della Mamma**: il cuore batte e lancia onde d'urto, sangue, pozze |
+| La Cucitrice | **La Sarta**: maschere dei boss, cuciture che attraversano lo schermo | **Il Telaio**: l'arena si restringe, fili d'oro rotanti, maschere di Signore della Luna, Escribar e Gabriele | **L'Ultimo Filo**: due maschere alla volta, «tutti i finali insieme» |
+
+| Mini-boss | Fase 1 | Fase 2 |
+|---|---|---|
+| Falso Cavaliere | La Mazza | Il Verme nella Corazza: tre salti, onda d'urto, si espone |
+| Spadacchina | Spadacchina | Furia: spada-boomerang doppia, trottola |
+| Megera | La Frusta | Le Sorelle Furie: arrivano Aletto (carica) e Tisifone (frusta a distanza) |
+| Signor Oshiro | Il Signor Oshiro | L'Albergo è Chiuso: quattro cariche che lasciano polvere |
+| Il Portinaio | Il Portinaio | Aura Infuocata: aura che brucia, doppio schianto con onde |
+| Ten Piedad | Ten Piedad | Senza Pietà: onde d'urto, croce di spine |
+| Occhio di Cthulhu | L'Occhio | La Bocca: l'iride diventa una bocca, cinque cariche |
+| Monstro | Monstro | Monstro Infuriato: saltelli a catena, pioggia di lacrime |
+
+### 13.5 Leggibilità degli scontri
+- **Mira delle armi:** le armi danno una priorità morbida a boss, mini-boss e punti deboli. Ignorano i bersagli invulnerabili o nascosti.
+- **Orda:** durante un boss l'orda si dirada al 15%, durante un mini-boss al 55%.
+- **Lampeggio dei boss:** colpiti, lampeggiano al massimo 4 volte al secondo, così restano leggibili sotto il fuoco continuo.
+- **Barra del boss:**
+  - mostra le tacche delle soglie e «FASE n/3 · nome»;
+  - indica lo stato: protetto, scudo alzato, parata, vulnerabile;
+  - anche i mini-boss hanno la loro barra;
+  - una Mamma nascosta parla con una nuvoletta sotto la barra.
+- **Telegrafi:** quelli di un boss si annullano se muore o cambia fase.
+- **Danni:** il contatto con i boss e gli attacchi medi restano sotto la soglia del «colpo pesante». Solo pestoni, purificazioni e attacchi ad area molto telegrafati tolgono 2 maschere o 2 cuori.
+
+### 13.6 Icone e oggetti
+- **Icone:** ogni arma, evoluzione, oggetto, amuleto, dono degli dèi, pergamena e reliquia ha un'icona 16×16 disegnata a mano (file `art5_icons_*.js`), nello stile del gioco d'origine. Le icone compaiono:
+  - nelle carte del level-up;
+  - nell'HUD;
+  - nella Mappa delle Trame;
+  - nella scena della Ricucitura.
+- **Slot dell'HUD:** gli slot di supporto sono grandi come quelli delle armi, così le icone restano nitide.
+- **Spada Corta:** la lama si colora del minerale del suo livello.
+- **Cibo a terra:** cambia con il mondo:
+  - bozzolo di Linfa Vitale;
+  - fiala di sangue;
+  - melagrana;
+  - cioccolata calda;
+  - pollo arrosto;
+  - Fiasca di Bile;
+  - pozione di cura;
+  - cuore;
+  - pasticcino di pezza.

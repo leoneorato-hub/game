@@ -157,7 +157,8 @@ function render(c) {
   }
   for (const k of G.pickups) {
     if (k.life !== undefined && k.life < 4 && Math.floor(k.life * 8) % 2 === 0) continue; // sta per sparire
-    let spr = k.kind === 'food' ? (G.players.every(pl => pl.char.id === 'isaac') ? 'heart' : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
+    // il cibo a terra cambia con il mondo (bozzolo di linfa, melagrana, Fiasca di Bile…)
+    let spr = k.kind === 'food' ? (G.players.every(pl => pl.char.id === 'isaac') ? 'heart' : SPR['food_' + G.stage.id] ? 'food_' + G.stage.id : 'food') : k.kind === 'unravel' ? 'yarn' : k.kind;
     if (!SPR[spr]) spr = PK_FALLBACK[spr] || 'chest';
     if (k.kind.startsWith('pk_')) { const pc = PK_GLOW[k.kind] || '#ffd23f'; c.fillStyle = pc; c.globalAlpha = 0.18 + 0.12 * Math.sin(k.t * 5); c.beginPath(); c.arc(Math.round(k.x - camX), Math.round(k.y - camY), 9, 0, TAU); c.fill(); c.globalAlpha = 1; light(k.x, k.y, 26, pc); }
     const bob = Math.sin(k.t * 4) * 1.5;
@@ -797,9 +798,13 @@ function drawWSlot(c, x, y, sz, w, mini) {
   const d = WEAPONS[w.id];
   const col = d.tiers ? TIERS[w.lvl - 1].c : d.icon[1];
   const full = w.lvl >= d.max;
-  const ic = icon(d.icon[0], w.evo ? '#ffd23f' : col, d.icon[2]);
-  const k = sz >= 16 ? 1 : 0.8;
-  c.drawImage(ic, Math.round(x + sz / 2 - 5 * k), Math.round(y + sz / 2 - 5 * k), 10 * k, 10 * k);
+  const img = weaponIconImg(w);
+  if (img && sz >= 16) c.drawImage(img, Math.floor(x + (sz - 16) / 2), Math.floor(y + (sz - 16) / 2));
+  else if (img) c.drawImage(iconMini(img, sz - 2), x + 1, y + 1);
+  else {
+    const k = sz >= 16 ? 1 : 0.8;
+    c.drawImage(icon(d.icon[0], w.evo ? '#ffd23f' : col, d.icon[2]), Math.round(x + sz / 2 - 5 * k), Math.round(y + sz / 2 - 5 * k), 10 * k, 10 * k);
+  }
   if (w.cdMax > 0.35 && w.t > 0 && !mini) {
     const f = clamp(w.t / w.cdMax, 0, 1);
     c.fillStyle = 'rgba(10,6,14,.55)'; c.fillRect(x + 1, y + 1 + Math.round((sz - 2) * (1 - f)), sz - 2, Math.round((sz - 2) * f));
@@ -825,10 +830,10 @@ function slotBox(c, x, y, sz, col, on, glow) {
 function drawLoadout(c, x, y) {
   const ch = G.char, nW = ch.maxW || 6;
   const sup = passiveList();
-  const nS = Math.max(6, Math.min(24, sup.length));
-  const rowsS = Math.ceil(nS / 8);
-  const wSz = 17, sSz = 13;
-  const w = 40 + Math.max(nW * (wSz + 3), Math.min(8, nS) * (sSz + 3)) + 4;
+  const PER = 6, nS = Math.max(PER, Math.min(24, sup.length));
+  const rowsS = Math.ceil(nS / PER);
+  const wSz = 17, sSz = 17;
+  const w = 40 + Math.max(nW, PER) * (wSz + 3) + 4;
   const h = 8 + wSz + 6 + rowsS * (sSz + 4) + 4;
   panelFrame(c, x, y, w, h, '#8c6a2f');
   // ARMI
@@ -845,12 +850,14 @@ function drawLoadout(c, x, y) {
   const sy0 = y + wSz + 14;
   txt(c, 'SUPP.', x + 6, sy0 + 2, '#7ad0c8', 8);
   for (let i = 0; i < nS; i++) {
-    const sx = x + 40 + (i % 8) * (sSz + 3), sy = sy0 + Math.floor(i / 8) * (sSz + 4);
+    const sx = x + 40 + (i % PER) * (sSz + 3), sy = sy0 + Math.floor(i / PER) * (sSz + 4);
     const it = sup[i], d = it && PASSIVES[it.id];
     slotBox(c, sx, sy, sSz, d && d.relic ? '#ffd23f' : '#5fbfb6', !!it);
     if (!it) continue;
-    c.drawImage(icon(d.icon[0], d.icon[1], d.icon[2]), sx + 1, sy + 1, 11, 11);
-    if (d.max > 1 && d.max < 99) { c.fillStyle = it.lvl >= d.max ? '#ffd23f' : '#efe6d2'; for (let k = 0; k < Math.min(it.lvl, 6); k++) c.fillRect(sx + 1 + k * 2, sy + sSz + 1, 1, 1); }
+    const img = passiveIconImg(it.id);
+    if (img) c.drawImage(img, sx + Math.floor((sSz - 16) / 2), sy + Math.floor((sSz - 16) / 2));
+    else c.drawImage(icon(d.icon[0], d.icon[1], d.icon[2]), sx + 3, sy + 3, 11, 11);
+    if (d.max > 1 && d.max < 99) { c.fillStyle = it.lvl >= d.max ? '#ffd23f' : '#efe6d2'; for (let k = 0; k < Math.min(it.lvl, 6); k++) c.fillRect(sx + 3 + k * 2, sy + sSz + 1, 1, 1); }
     if (d.relic) { c.fillStyle = '#ffd23f'; c.fillRect(sx + sSz - 3, sy, 3, 3); }
     if (d.charm) { c.fillStyle = G.overcharmed ? '#e0303a' : '#9aa6b8'; c.fillRect(sx, sy, 2, 2); }
   }
@@ -925,7 +932,7 @@ function drawCoopPanels(c) {
     // armi e supporto in miniatura
     const wy = y + 27;
     for (let k = 0; k < Math.min(6, ch.maxW || 6); k++) { const sx = hx + k * 12; slotBox(c, sx, wy, 10, '#c9a050', !!G.weapons[k]); if (G.weapons[k]) drawWSlot(c, sx, wy, 10, G.weapons[k], true); }
-    passiveList().slice(0, Math.floor((pw - 40) / 8)).forEach((it, k) => { const d = PASSIVES[it.id]; c.drawImage(icon(d.icon[0], d.icon[1], d.icon[2]), hx + k * 8, wy + 12, 7, 7); });
+    passiveList().slice(0, Math.floor((pw - 40) / 8)).forEach((it, k) => { const d = PASSIVES[it.id], img = passiveIconImg(it.id); c.drawImage(img ? iconMini(img, 7) : icon(d.icon[0], d.icon[1], d.icon[2]), hx + k * 8, wy + 12, 7, 7); });
     c.globalAlpha = 1;
   });
   usePl(lead);
@@ -1100,22 +1107,22 @@ function drawCine(c) {
   const C = G.cine, k = 1 - C.t / C.max;
   c.fillStyle = `rgba(8,4,14,${Math.min(0.85, k * 3)})`; c.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2 - 10;
-  const a = C.a, b = C.b;
-  const ia = icon(a.icon[0], a.icon[1], a.icon[2]);
-  const ib = b ? icon(b.icon[0], b.icon[1], b.icon[2]) : ia;
+  const a = C.a, b = C.b, rw = C.rule.w, rq = C.rule.req[0];
+  const ia = weaponIconImg({ id: rw, lvl: WEAPONS[rw].max }) || icon(a.icon[0], a.icon[1], a.icon[2]);
+  const ib = (WEAPONS[rq] ? weaponIconImg({ id: rq, lvl: WEAPONS[rq].max }) : passiveIconImg(rq)) || (b ? icon(b.icon[0], b.icon[1], b.icon[2]) : ia);
   if (k < 0.45) {
     const m = k / 0.45;
     const off = 120 * (1 - m);
-    c.drawImage(ia, cx - off - 20, cy - 20, 40, 40);
-    c.drawImage(ib, cx + off - 20, cy - 20, 40, 40);
+    c.drawImage(ia, cx - off - 24, cy - 24, 48, 48);
+    c.drawImage(ib, cx + off - 24, cy - 24, 48, 48);
     txt(c, a.name, cx - off, cy + 26, '#efe6d2', 8, 'center');
     if (b) txt(c, b.name, cx + off, cy + 26, '#efe6d2', 8, 'center');
   } else if (k < 0.6) {
     for (let i = 0; i < 24; i++) { const ang = i / 24 * TAU + k * 8, r = (k - 0.45) * 500; c.fillStyle = i % 2 ? a.icon[1] : '#e2b04a'; c.fillRect(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 3, 3); }
     c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.beginPath(); c.moveTo(cx - 30, cy - 30); c.lineTo(cx + 30, cy + 30); c.stroke(); c.lineWidth = 1;
   } else {
-    const gi = icon(a.icon[0], '#ffd23f', a.icon[2]);
-    const s = 40 + Math.sin(k * 20) * 2;
+    const gi = weaponIconImg({ id: rw, lvl: WEAPONS[rw].max, evo: true }) || icon(a.icon[0], '#ffd23f', a.icon[2]);
+    const s = 48 + Math.round(Math.sin(k * 20) * 2) * 2;
     c.drawImage(gi, cx - s / 2, cy - s / 2, s, s);
     stitchRect(c, cx - 30, cy - 30, 60, 60, '#ffd23f');
     txt(c, 'RICUCITURA', cx, cy - 58, '#e2b04a', 16, 'center');

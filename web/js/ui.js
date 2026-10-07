@@ -270,7 +270,7 @@ const UI = {
       <dl class="facts">
         <dt>Vita</dt><dd>${esc(c.life)}</dd>
         <dt>Risorsa</dt><dd>${esc(c.resource)}</dd>
-        <dt>Arma iniziale</dt><dd><img class="ico" alt="" src="${iconURL(w.icon[0], w.icon[1], w.icon[2], 2)}"> ${esc(w.name)}: ${esc(w.lines[0])}</dd>
+        <dt>Arma iniziale</dt><dd><img class="ico" alt="" src="${optIconURL({ kind: 'weapon', id: c.start, icon: w.icon, lvl: 0 }, 2)}"> ${esc(w.name)}: ${esc(w.lines[0])}</dd>
         <dt>Abilità <kbd>SPAZIO</kbd></dt><dd><b>${esc(c.abilityName)}</b>: ${esc(c.abilityHint)}${c.id === 'v1' ? ' · <kbd>Q</kbd> cambia arma' : ''}</dd>
         <dt>Difficoltà</dt><dd>${'◆'.repeat(c.diff)}${'◇'.repeat(3 - c.diff)}</dd>
       </dl>`;
@@ -492,7 +492,7 @@ const UI = {
       const pips = o.max && o.max > 1 && o.max < 99 ? `<span class="pips">${Array.from({ length: o.max }, (_, k) => `<i class="${k < o.lvl ? 'on' : k === o.lvl ? 'next' : ''}"></i>`).join('')}</span>` : '';
       b.innerHTML = `<span class="lv-key">${i + 1}</span>
         <span class="lv-tag">${esc(o.tag || (o.kind === 'scroll' ? 'PERGAMENA' : ''))}</span>
-        <img alt="" src="${iconURL(o.icon[0], o.icon[1], o.icon[2], 5)}">
+        <img alt="" src="${optIconURL(o, 3)}">
         <span class="lv-name">${esc(o.name)}</span>
         ${pips}
         <span class="lv-line">${esc(o.line)}</span>
@@ -512,10 +512,8 @@ const UI = {
   previewMap(o) {
     const box = $('#lv-map');
     const list = G.weapons.map(w => {
-      const d = WEAPONS[w.id];
-      const col = d.tiers ? TIERS[w.lvl - 1].c : d.icon[1];
       const hl = o && o.id === w.id ? ' hl' : '';
-      return `<li class="${hl}"><img alt="" src="${iconURL(d.icon[0], w.evo ? '#ffd23f' : col, d.icon[2], 2)}"> ${esc(weaponName(w))} <span class="muted">lv ${w.lvl}</span></li>`;
+      return `<li class="${hl}"><img alt="" src="${weaponIconURL(w, 1)}"> ${esc(weaponName(w))} <span class="muted">lv ${w.lvl}</span></li>`;
     }).join('');
     const syns = SYN.filter(s => s.char === G.char.id || s.char === '*').map(s => {
       const on = owned(s.a) && owned(s.b);
@@ -562,7 +560,7 @@ const UI = {
       const b = el('button', 'lv-card nav relic');
       b.type = 'button';
       b.style.animationDelay = (i * 0.07) + 's';
-      b.innerHTML = `<span class="lv-key">${i + 1}</span><img alt="" src="${iconURL(o.icon[0], o.icon[1], o.icon[2], 5)}"><span class="lv-name">${esc(o.name)}</span><span class="lv-line">${esc(o.line)}</span>`;
+      b.innerHTML = `<span class="lv-key">${i + 1}</span><img alt="" src="${optIconURL(o, 3)}"><span class="lv-name">${esc(o.name)}</span><span class="lv-line">${esc(o.line)}</span>`;
       b.onclick = () => { if (this.choosing || performance.now() < (this.lvLock || 0)) return; this.choosing = true; o.act(); sfx('evo'); this.hideAll(); MODE = 'play'; if (G) usePl(leadPl()); setTimeout(() => { this.choosing = false; }, 50); };
       row.appendChild(b);
     });
@@ -642,8 +640,8 @@ const UI = {
 
 function threadMapHTML() {
   const c = G.char;
-  const ws = G.weapons.map(w => { const d = WEAPONS[w.id]; return `<li><img alt="" src="${iconURL(d.icon[0], w.evo ? '#ffd23f' : (d.tiers ? TIERS[w.lvl - 1].c : d.icon[1]), d.icon[2], 2)}"> ${esc(weaponName(w))} <span class="muted">lv ${w.lvl}/${d.max}</span>${d.slot && G.boons[d.slot] ? ` <span style="color:${GODS[G.boons[d.slot].god].col}">· ${esc(BOON_NAMES[G.boons[d.slot].god][d.slot])}</span>` : ''}</li>`; }).join('');
-  const ps = [...G.passives, ...G.charms].map(p => { const d = PASSIVES[p.id]; return `<li><img alt="" src="${iconURL(d.icon[0], d.icon[1], d.icon[2], 2)}"> ${esc(d.name)} ${d.relic ? '<span class="gold">· reliquia</span>' : ''}${d.max > 1 && d.max < 99 ? `<span class="muted">lv ${p.lvl}</span>` : ''}</li>`; }).join('');
+  const ws = G.weapons.map(w => { const d = WEAPONS[w.id]; return `<li><img alt="" src="${weaponIconURL(w, 1)}"> ${esc(weaponName(w))} <span class="muted">lv ${w.lvl}/${d.max}</span>${d.slot && G.boons[d.slot] ? ` <span style="color:${GODS[G.boons[d.slot].god].col}">· ${esc(BOON_NAMES[G.boons[d.slot].god][d.slot])}</span>` : ''}</li>`; }).join('');
+  const ps = [...G.passives, ...G.charms].map(p => { const d = PASSIVES[p.id]; return `<li><img alt="" src="${passiveIconURL(p.id, 1)}"> ${esc(d.name)} ${d.relic ? '<span class="gold">· reliquia</span>' : ''}${d.max > 1 && d.max < 99 ? `<span class="muted">lv ${p.lvl}</span>` : ''}</li>`; }).join('');
   const syn = SYN.filter(s => s.char === c.id || s.char === '*').map(s => {
     const a = owned(s.a), b = owned(s.b);
     const st = a && b ? 'on' : (a || b) ? 'half' : 'off';

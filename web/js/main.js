@@ -305,7 +305,7 @@ function update(dt) {
     fxParticles(G.bossE.x, G.bossE.y, '#ffd23f', 60, 200, 1.2, 2);
     shake(8); sfx('evo'); G.flashW = 0.8; G.hitStop = 0.4;
     for (const e of G.enemies) if (!e.boss && !e.prop) { e.dead = true; e.noXp = true; fxParticles(e.x, e.y, e.blood || '#fff', 3, 40, 0.3); }
-    G.eprojs = []; G.teles = [];
+    G.eprojs = []; G.teles = []; G.bhz = []; G.bshock = []; G.bdoors = [];
     if (G.contE) { G.contE.dead = true; G.contE = null; }
     // tutti i giocatori a terra si rialzano
     for (const pl of G.players) if (pl.down) { pl.down = false; withPl(pl, () => { G.p.hp = G.char.hpMode === 'anxiety' ? 30 : Math.max(1, Math.ceil(G.p.maxHp * 0.4)); G.p.invuln = 2; }); }
