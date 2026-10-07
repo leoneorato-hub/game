@@ -240,7 +240,6 @@
 
   // ---------------------------------------------------------------- PALETTE
   const GOLD = MAT(['#5a3010', '#9a5e1a', '#d39a30', '#f2cc5e', '#fff0a8']);
-  const GOLDL = MAT(['#a85a10', '#e8a020', '#ffd23f', '#fff09a', '#ffffff'], { glow: true });
   const SILVER = MAT(['#2e3246', '#555b72', '#8a90a6', '#bcc2d2', '#eef0f6']);
   const glowOf = (m, base) => MAT(m.r, { glow: m.glow, soft: m.soft, noOl: m.noOl, ol: m.ol, base });
   // lingua di fiamma (emissiva): base in (x,y), alta h, larga w, inclinata di lean
@@ -260,30 +259,63 @@
   // disegnato a parte dal gioco: perno a (30, 39) nello sprite).
   // =============================================================================
   {
-    const SHELL = MAT(['#7c788c', '#b6b3c2', '#e2e0e8', '#f8f8fb']);
+    const SHELL = MAT(['#7c788c', '#b9b6c4', '#e4e2ea', '#fbfbfd']);
     const VOID = MAT(['#060509', '#110f17', '#1e1b28', '#302b3e']);
-    const CLOAK = MAT(['#1d2129', '#323843', '#4b535e', '#68717c', '#8e979f']);
+    const CLOAK = MAT(['#24262c', '#3d4047', '#5d6168', '#81858b', '#a9adb1']);
     const INF = MAT(['#7a2406', '#d0520e', '#ff8a1e', '#ffc04a', '#fff2c0'], { glow: true, ol: '#4a1606' });
-    const IRON = MAT(['#24242e', '#484a58', '#767a8c', '#a4a8b6']);
+    const IRON = MAT(['#24242e', '#4c4e5c', '#7c8092', '#b0b4c2']);
+    // testa disegnata a mano (21x27): corna lunghe e affilate che si aprono verso
+    // l'esterno, maschera a goccia, occhi neri. H luce · w base · s ombra · d ombra fonda · k vuoto
+    const HEAD = [
+      '.H.................s.',
+      '..H...............s..',
+      '..Hw.............ws..',
+      '...Hw...........Hs...',
+      '...Hw...........Hs...',
+      '...Hww.........Hws...',
+      '....Hww.......Hws....',
+      '....Hww.......Hws....',
+      '....Hwww.....Hwws....',
+      '.....HwwHHHwwwws.....',
+      '.....HHHHwwwwwws.....',
+      '....HHHHwwwwwwwws....',
+      '...HHHwwwwwwwwwwws...',
+      '...Hwkkkwwwwwkkkws...',
+      '..Hwkkkkkwwwkkkkkws..',
+      '..Hwkkkkkwwwkkkkkws..',
+      '..Hwkkkkkwwwkkkkkws..',
+      '..Hwkkkkkwwwkkkkkws..',
+      '..Hwkkkkkwwwkkkkkws..',
+      '...wkkkkkwwwkkkkkd...',
+      '...wwkkkwwwwwkkkwd...',
+      '....wwwwwwwwwwwsd....',
+      '.....wwwwwwwwwsd.....',
+      '......swwwwwwsd......',
+      '.......ssssssd.......',
+      '........ssssd........',
+      '.........ssd.........',
+    ];
+    const HM = { H: [SHELL, 3], w: [SHELL, 2], s: [SHELL, 1], d: [SHELL, 0], k: [VOID, 0] };
+    // bolle d'Infezione rotonde (nucleo chiaro in alto a sinistra)
     const BL = {
-      1: ['c'],
       2: ['cb', 'ba'],
-      3: ['.c.', 'cdb', '.a.'],
-      4: ['.cb.', 'cdcb', 'bcba', '.aa.'],
-      5: ['.ccb.', 'cddcb', 'cdcba', 'bcbaa', '.aaa.'],
+      3: ['ccb', 'cdb', 'bba'],
+      4: ['.cb.', 'cddb', 'cdcb', '.ba.'],
+      5: ['.ccb.', 'cddcb', 'cddcb', 'bccba', '.bba.'],
+      6: ['.ccbb.', 'cdddcb', 'cddccb', 'cdccba', 'bccbba', '.bbaa.'],
     };
     const BM = { a: [INF, 1], b: [INF, 2], c: [INF, 3], d: [INF, 4] };
     const blob = (P, x, y, n) => P.stamp(Math.round(x - n / 2), Math.round(y - n / 2), BL[n], BM);
-    // catena: linea di 1 px a toni alterni (anelli), con contorno automatico
-    const chain = (P, pts) => {
-      let j = 0;
-      for (let q = 0; q < pts.length - 1; q++) {
-        const [x0, y0] = pts[q], [x1, y1] = pts[q + 1], n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0 || 1;
-        for (let t = 0; t < n; t++, j++) {
-          const x = Math.round(x0 + (x1 - x0) * t / n), y = Math.round(y0 + (y1 - y0) * t / n);
-          P.px(x, y, IRON, [3, 2, 0][j % 3], { same: j > 0 });
-          if (j % 3 === 0) P.px(x + 1, y, IRON, 1, { same: true });
-        }
+    // catena a maglie: anello (rombo con foro) + maglia di taglio, l'ultima spezzata
+    const RING = ['.o.', 'o.o', 'o.o', '.o.'], BAR = ['.i.', '.i.', '.i.'], OPEN = ['.o.', 'o.o', 'o..'];
+    const chain = (P, x, y, n, dx = 0) => {
+      let yy = y, xx = x;
+      for (let i = 0; i < n; i++) {
+        const last = i === n - 1;
+        P.stamp(Math.round(xx) - 1, yy, last ? OPEN : RING, { o: [IRON, 3] });
+        if (last) break;
+        P.stamp(Math.round(xx + dx / 2) - 1, yy + 3, BAR, { i: [IRON, 1] });
+        yy += 5; xx += dx;
       }
     };
     reg3('hollowknight', 48, 60, (P, k, p2) => {
@@ -302,45 +334,38 @@
       P.poly([[15.5, 27.5 + y], [22, 27 + y], [21.5, 34 + y], [20.5, 42], [19 + sw, 48], [17, 44.5], [14.5, 48.5], [13, 42], [13.3, 33]], CLOAK, { edge: 1, bias: 0.06 });
       // lembo destro (dietro al braccio)
       P.poly([[27.5, 27 + y], [32.5, 28 + y], [35, 34], [35.5, 43], [33.5 + sw, 47.5], [31.5, 44], [29, 46.5], [29.2, 37]], CLOAK, { edge: 1, bias: -0.04 });
-      // pieghe
-      P.line(17, 31 + y, 15.5, 43, CLOAK, 1, { keep: true }); P.line(19.5, 33 + y, 18.5, 45, CLOAK, 1, { keep: true });
-      P.line(33, 34, 33.5, 42, CLOAK, 1, { keep: true });
+      // pieghe (poche, lunghe)
+      P.line(17.5, 31 + y, 16, 44, CLOAK, 1, { keep: true });
+      P.line(33, 35, 33.5, 43, CLOAK, 1, { keep: true });
       P.line(14.5, 31 + y, 14, 40, CLOAK, 4, { keep: true });
       // colletto sulle spalle
-      P.ell(24, 27.5 + y, 8.5, 2.4, CLOAK, { edge: 1, fl: 0.5, bias: 0.02 });
+      P.ell(24, 27.5 + y, 8.5, 2.4, CLOAK, { edge: 1, fl: 0.5, bias: 0.04 });
       P.ell(24, 26 + y, 3.4, 1.4, VOID, { tone: 0 });
-      // Infezione sul busto
+      // Infezione sul busto: bolle rotonde
       const blobs = p2
-        ? [[25, 35, 5], [22.5, 40.5, 4], [27.5, 41, 3], [23.5, 31.2, 3], [20.5, 36, 2], [17, 39, 3], [32.5, 31.5, 2], [26, 45, 2], [15, 46, 2], [33, 44, 2]]
-        : [[25, 35.5, 4], [22.5, 40.5, 3], [27.5, 41.5, 2]];
+        ? [[24.5, 35, 6], [22, 41, 4], [27.5, 41.5, 3], [24, 30.5, 3], [19.5, 37, 2], [16, 40, 3], [33, 31, 2], [26, 46, 2], [15, 46.5, 2], [33.5, 44, 3], [29.5, 31.5, 2]]
+        : [[24.5, 35.5, 5], [22.5, 41, 3], [27.5, 41.5, 2]];
       for (const [bx, by, n] of blobs) blob(P, bx, by + (by < 44 ? y : 0), n);
-      // braccio destro (regge l'Aculeo)
-      P.cap(31, 29.5 + y, 32, 37 + y, 1.5, VOID, { edge: 2, r2: 1.2 });
-      P.ell(31.5, 38.5, 1.8, 1.6, VOID, { tone: 3 });
-      P.rect(30.2, 35 + y, 3.4, 1.2, IRON, { tone: 2 });  // manetta
-      // catene spezzate: dalla spalla sinistra e dalla manetta
-      chain(P, [[13, 29 + y], [11, 33 + y], [10 + sw, 38 + y], [10.5 + sw, 42 + y]]);
-      chain(P, [[34, 36 + y], [35.5, 39 + y], [36 + sw, 43]]);
-      // corna
-      P.cap(19.5, 11 + y, 17.6, 4 + y, 1.9, SHELL, { r2: 1.3 });
-      P.cap(17.6, 4.5 + y, 16.4, 1 + y, 1.3, SHELL, { r2: 0.7, same: true });
-      P.cap(28.5, 11 + y, 30.4, 4 + y, 1.9, SHELL, { r2: 1.3 });
-      P.cap(30.4, 4.5 + y, 31.6, 1 + y, 1.3, SHELL, { r2: 0.7, same: true });
-      // maschera
-      P.egg(24, 16.5 + y, 8.6, 7.5, 9.5, 0.34, SHELL, { edge: 1, fl: 0.75, bias: 0.16 });
-      // occhi
-      P.ell(20.2, 18 + y, 2.4, 3.8, VOID, { tone: 0, rot: 0.12 });
-      P.ell(27.8, 18 + y, 2.4, 3.8, VOID, { tone: 0, rot: -0.12 });
-      // crepa che perde Infezione dall'occhio destro
-      P.line(27, 9 + y, 26, 11 + y, VOID, 1); P.line(26, 11 + y, 27, 13 + y, VOID, 1, { same: true });
-      P.px(27, 14 + y, INF, 1);
-      P.stamp(27, 17 + y, ['c', 'd', 'b', 'a'], BM);
-      P.stamp(27, 23 + y, ['b', 'a', 'a'], BM); P.px(28, 24 + y, INF, 1);
+      // braccio destro sottile che esce dal mantello (regge l'Aculeo, perno ~ (30, 39))
+      P.cap(29.5, 30 + y, 31, 37, 1.3, VOID, { edge: 2, r2: 1.1 });
+      P.ell(31, 38.6, 1.9, 1.7, VOID, { tone: 3 });
+      P.rect(29.4, 35, 3.6, 1.1, IRON, { tone: 3 }); P.px(32, 36, IRON, 1, { keep: true });  // manetta
+      // catene spezzate: dal moncherino sinistro e dalla manetta
+      chain(P, 11.5, 29 + y, 3, -0.5);
+      chain(P, 34.5, 37, 2, 0.8);
+      // testa
+      const HX = 14, HY = 1 + y;
+      P.stamp(HX, HY, HEAD, HM);
+      // crepa al centro della maschera che scende nell'occhio destro, Infezione che cola
+      P.stamp(HX + 11, HY + 8, ['.k', '.k', 'k.', '.b'], { k: [VOID, 0], b: [INF, 2] }, { keep: true });
+      P.stamp(HX + 13, HY + 15, ['.c', 'cd', 'db', 'ba', 'a.'], BM, { keep: true });          // occhio infetto
+      P.stamp(HX + 13, HY + 21, ['b', 'a', '.'], BM, { keep: true }); P.px(HX + 14, HY + 23, INF, 1, { keep: true });
       if (p2) {
-        P.line(26, 14 + y, 25, 15 + y, VOID, 1); P.line(22, 23 + y, 23, 25 + y, VOID, 1);
-        P.stamp(20, 17 + y, ['c', 'd', 'b'], BM);
-        P.stamp(23, 24 + y, ['c', 'b'], BM);
-        blob(P, 18.5, 11 + y, 2); blob(P, 30, 21 + y, 2);
+        P.stamp(HX + 8, HY + 9, ['k..', '.k.', '.k.'], { k: [VOID, 0] }, { keep: true });
+        P.stamp(HX + 5, HY + 15, ['.c', 'cd', 'cb', 'ba'], BM, { keep: true });            // anche l'altro occhio
+        P.stamp(HX + 6, HY + 21, ['b', 'a'], BM, { keep: true });
+        P.stamp(HX + 3, HY + 11, ['k.', '.k'], { k: [VOID, 0] }, { keep: true });
+        blob(P, HX + 4.5, HY + 10.5, 2); blob(P, HX + 17, HY + 19, 2);
       }
     });
   }
@@ -358,13 +383,16 @@
     const RAGE = MAT(['#6a0c08', '#c8200e', '#ff4a1e', '#ff9a5a', '#ffe8d0'], { glow: true, ol: '#3a0606' });
     const CLOTH = MAT(['#6e6258', '#a89c8c', '#d8cebe', '#f6f0e4']);
     // penne di luce: non emissive (così ogni penna ha il suo bordo), contorno caldo
-    const FEA = MAT(['#c0701a', '#f0a428', '#ffd23f', '#fff09a', '#ffffff'], { soft: true, ol: '#6a3208' });
+    // ali e aureola: costrutti di luce azzurro cielo (come nel gioco); le armi evocate sono di luce dorata
+    const SKY = MAT(['#2a74c4', '#4fa8ec', '#8ed6ff', '#d0f2ff', '#ffffff'], { glow: true, ol: '#103462' });
+    const FEA = MAT(['#2f7cc8', '#58b2ee', '#94d8ff', '#d0f2ff', '#ffffff'], { soft: true, ol: '#103462' });
+    const VISOR = MAT(['#7a7e96', '#b8bccc', '#e6e8f0', '#ffffff']);
     const FEA2 = MAT(['#9a1a0c', '#d8341a', '#ff5a2a', '#ffa070', '#ffe8d0'], { soft: true, ol: '#3a0606' });
     const CLOTH2 = MAT(['#2e0e12', '#5a1a20', '#8a2a2e', '#b44842']);
     const LEATH = MAT(['#1c1016', '#36202a', '#543440', '#74505a']);
     reg3('gabriel', 60, 62, (P, k, p2) => {
       const A = p2 ? ARM2 : ARM, G = p2 ? GLD2 : GOLD, L = p2 ? RAGE : LIGHT, C = p2 ? CLOTH2 : CLOTH;
-      const LB = glowOf(L, 2), y = k;
+      const LB = glowOf(p2 ? RAGE : SKY, 2), y = k;
       // ali di luce: 5 penne affilate per lato
       const wing = (rx, ry, s) => {
         const angs = [-10, 10, 30, 50, 68], lens = [15, 21, 25, 24, 19];
@@ -403,7 +431,7 @@
       P.line(24, 38, 38, 38, G, 2, { keep: true });
       P.rect(25.5, 32.5, 11, 2, G, { edge: 1 });
       // spalla lontana + braccio sinistro
-      P.ell(23, 23.6 + y, 4.8, 3.8, G); P.ell(23, 22.6 + y, 4.6, 3.4, A, { edge: 1 });
+      P.ell(23, 23.6 + y, 4.8, 3.8, A); P.ell(23, 22.6 + y, 4.6, 3.4, G, { edge: 1 });
       P.cap(21.5, 26 + y, 20.5, 33 + y, 2.1, A, { edge: 1 });
       P.ell(20.5, 34 + y, 2.2, 2, G, { edge: 1 });
       // corazza
@@ -417,14 +445,17 @@
       P.cap(46, 35 + y, 55, 54, 1.3, L, { r2: 0.5 });
       P.line(44, 37 + y, 48, 33 + y, G, 3);
       // spalla vicina + braccio destro
-      P.ell(39, 23.6 + y, 4.9, 3.8, G); P.ell(39, 22.6 + y, 4.7, 3.4, A, { edge: 1 });
+      P.ell(39, 23.6 + y, 4.9, 3.8, A); P.ell(39, 22.6 + y, 4.7, 3.4, G, { edge: 1 });
       P.cap(40, 26 + y, 42, 30 + y, 2.1, A, { edge: 1 });
       P.cap(42, 30 + y, 45, 33 + y, 2, A, { edge: 1 });
       P.ell(45.5, 34 + y, 2.1, 1.9, G, { edge: 1 });
       // elmo
-      P.egg(31, 13 + y, 4.9, 5.6, 5.6, 0.22, A, { edge: 1 });
-      P.line(32, 8 + y, 32, 17 + y, G, 3); P.line(29, 12 + y, 35, 12 + y, G, 3, { same: true });
+      // elmo: visiera bianca senza occhi, croce d'oro, fori per respirare, fascia d'oro in cima
+      P.egg(31, 13 + y, 4.9, 5.6, 5.6, 0.22, p2 ? A : VISOR, { edge: 1 });
+      P.rect(26, 7.4 + y, 10, 2, G, { keep: true });
+      P.line(32, 9 + y, 32, 17 + y, G, 3); P.line(29, 12 + y, 35, 12 + y, G, 3);
       P.px(33, 12 + y, G, 4); P.px(32, 13 + y, G, 2);
+      for (const [hx, hy] of [[29, 15], [30, 16], [34, 15], [35, 16]]) P.px(hx, hy + y, A, 0, { keep: true });
       if (p2) {
         P.px(30, 11 + y, RAGE, 4); P.px(29, 11 + y, RAGE, 2); P.px(34, 11 + y, RAGE, 4); P.px(35, 11 + y, RAGE, 2);
         P.line(32, 8 + y, 32, 17 + y, RAGE, 3, { keep: true }); P.line(29, 12 + y, 35, 12 + y, RAGE, 3, { keep: true });
@@ -447,7 +478,18 @@
     const FIRE = MAT(['#7a1a08', '#d8401a', '#ff7a1e', '#ffc04a', '#fff0a0'], { glow: true, ol: '#4a0a06' });
     const EYE = MAT(['#5a0606', '#c01414', '#ff3a2a', '#ffb0a0'], { glow: true, ol: '#2a0404' });
     const SHAFT = MAT(['#100a10', '#261a22', '#3e2c36', '#5a4450']);
-    const BONE = MAT(['#6a5a3a', '#a89060', '#d8c08a', '#f2e2b0']);
+    const BONE = MAT(['#5a4e44', '#9c8e7a', '#d2c6ae', '#f2ead8']);
+    // teschio sulla spalla (uno dei figli di Tifone) montato su oro
+    const SKULL = [
+      '..bbbbb..',
+      '.bBBbbbs.',
+      'bBBbbbbbs',
+      'bkkkbkkks',
+      'bkkkbkkks',
+      'bbbbkbbbs',
+      '.sbbbbbs.',
+      '.s.s.s.s.',
+    ];
     reg3('hades', 60, 66, (P, k, p2) => {
       const y = k;
       // mantello nero dietro
@@ -456,13 +498,22 @@
       P.poly([[19, 6 + y], [38, 6 + y], [41, 20 + y], [43, 31 + y], [40, 29.5 + y], [38, 33 + y], [35.5, 30 + y], [21.5, 30 + y], [19, 33 + y], [16.5, 29.5 + y], [13.5, 31 + y], [16, 20 + y]], HAIR, { bias: -0.05 });
       P.line(17, 22 + y, 15, 29 + y, HAIR, 3, { keep: true }); P.line(40, 21 + y, 41.5, 28 + y, HAIR, 2, { keep: true });
       // veste rossa (copre anche le spalle)
-      P.poly([[15, 22 + y], [42, 22 + y], [44.5, 27 + y], [42.5, 32], [44, 48], [48, 64.6], [8, 64.6], [11, 48], [12, 32], [12, 26 + y]], ROBE, { edge: 1 });
-      for (const [a, b] of [[17, 13], [22.5, 20.5], [33, 35], [38.5, 42.5]]) { P.line(a, 44, b, 63, ROBE, 1, { keep: true }); P.line(a + 1, 44, b + 1, 63, ROBE, 3, { keep: true }); }
+      P.poly([[15, 22 + y], [42, 22 + y], [44.5, 27 + y], [42.5, 32], [44, 48], [47.6, 62.2], [8.4, 62.2], [11, 48], [12, 32], [12, 26 + y]], ROBE, { edge: 1 });
+      for (const [a, b] of [[17, 13.5], [22.5, 20.8], [33, 34.8], [38.5, 42]]) { P.line(a, 44, b, 60, ROBE, 1, { keep: true }); P.line(a + 1, 44, b + 1, 60, ROBE, 3, { keep: true }); }
       P.line(36, 24 + y, 41, 31, ROBE, 1, { keep: true }); P.line(20, 25 + y, 17, 33, ROBE, 1, { keep: true });
       // pannello nero frontale bordato d'oro
-      P.poly([[24, 41], [32, 41], [34.5, 64.6], [21.5, 64.6]], BLK, { edge: 1 });
-      P.line(24, 42, 22, 63, GOLD, 3, { keep: true }); P.line(32, 42, 34, 63, GOLD, 2, { keep: true });
+      P.poly([[24, 41], [32, 41], [34.3, 62.2], [21.7, 62.2]], BLK, { edge: 1 });
+      P.line(24, 42, 22, 61, GOLD, 3, { keep: true }); P.line(32, 42, 34, 61, GOLD, 2, { keep: true });
       hemTrim(P, ROBE, GOLD, 3);
+      // piedi nudi che ardono e bruciano il suolo
+      const FOOT = ['..ss...', '.sbbs..', 'sbbbbbs', 'bbbbbbs'];
+      const FB = glowOf(FIRE, 2);
+      for (const [fx, d] of [[23, -1], [33, 1]]) {
+        flame(P, fx - 3.4, 65, 5 + (k ? 1 : 0), 1.3, FB, -0.9); flame(P, fx + 3.4, 65, 5 + (k ? 0 : 1), 1.3, FB, 0.9);
+        P.ell(fx, 64.3, 5, 1.2, FB);
+        P.stamp(Math.round(fx) - 3, 61, d < 0 ? FOOT.map(r => [...r].reverse().join('')) : FOOT, { s: [SKIN, 1], b: [SKIN, 3] }, { edge: 1 });
+        P.px(fx - 2, 64, FIRE, 4); P.px(fx + 1, 64, FIRE, 4);
+      }
       // cintura con fibbia a teschio e gemma
       P.rect(12.5, 39, 31, 2.6, GOLD, { edge: 1 });
       P.stamp(25.5, 37, ['.bbb.', 'bkbkb', 'bbrbb', '.bkb.'], { b: [BONE, 3], k: [BLK, 0], r: [EYE, 2] }, { edge: 1 });
@@ -472,9 +523,10 @@
       P.rect(7.6, 39.5, 6.8, 3.2, GOLD, { edge: 1 }); P.px(11, 41, EYE, 2);
       P.ell(11, 47.5, 3, 2.8, SKIN, { edge: 1 });
       // spallaccio a teschio d'oro sulla spalla sinistra
-      P.ell(15.5, 24.5 + y, 6, 4.6, GOLD, { edge: 1 });
-      P.stamp(13, 22 + y, ['.bbb.', 'bkbkb', 'bbbbb', '.b.b.'], { b: [BONE, 3], k: [BLK, 0] });
-      P.px(10, 26 + y, EYE, 2); P.px(21, 26 + y, EYE, 2);
+      P.ell(15.5, 27 + y, 6.4, 2.6, GOLD, { edge: 1 });
+      P.stamp(11, 19 + y, SKULL, { B: [BONE, 3], b: [BONE, 2], s: [BONE, 1], k: [BLK, 0] });
+      P.px(13, 22 + y, EYE, p2 ? 3 : 2, { keep: true }); P.px(17, 22 + y, EYE, p2 ? 3 : 2, { keep: true });
+      P.px(10, 27 + y, EYE, 2); P.px(21, 27 + y, EYE, 2);
       // Varatha, la Lancia Eterna
       P.cap(51.5, 13, 51.5, 64.5, 1.1, SHAFT);
       P.rect(50, 52, 3, 1.4, GOLD, { tone: 3 });
@@ -612,6 +664,7 @@
     const STITCH = MAT(['#4a0c1a', '#8e2b3a', '#c44a58']);
     const THR = MAT(['#a85a10', '#e8a020', '#ffd23f', '#fff09a', '#ffffff'], { glow: true, ol: '#4a2208' });
     const LOOSE = MAT(['#a85a10', '#e8a020', '#ffd23f', '#fff09a', '#ffffff'], { glow: true, noOl: true });
+    const PIN = MAT(['#2e3246', '#555b72', '#8a90a6', '#bcc2d2', '#eef0f6'], { noOl: true });
     // cucitura "a toppa": linea scura con punti d'oro perpendicolari
     const seam = (P, x0, y0, x1, y1, R, G, t) => {
       P.line(x0, y0, x1, y1, R, 0, { keep: true });
@@ -620,16 +673,17 @@
     };
     reg3('cucitrice', 56, 66, (P, k, p2) => {
       const R = p2 ? ROBE2 : ROBE, SEAM = p2 ? THR : GOLD, y = k, sw = k ? 1 : 0;
-      // aureola di fili: anello + raggi
-      for (let i = 0; i < 64; i++) { const a = i / 64 * TAU; P.px(28 + Math.cos(a) * 12.5, 13 + y + Math.sin(a) * 12.5, THR, 2, { same: i > 0 }); }
-      for (let i = 0; i < 12; i++) {
-        const a = i / 12 * TAU + (k ? 0.13 : 0), r1 = i % 2 ? 15 : 17;
-        P.line(28 + Math.cos(a) * 9, 13 + y + Math.sin(a) * 9, 28 + Math.cos(a) * r1, 13 + y + Math.sin(a) * r1, THR, i % 2 ? 2 : 3);
+      // aureola di fili: anello sottile di filo d'oro + fili tesi a raggiera con aghi in punta
+      for (let i = 0; i < 72; i++) { const a = i / 72 * TAU; P.px(28 + Math.cos(a) * 12.5, 13 + y + Math.sin(a) * 12, LOOSE, i % 9 < 5 ? 3 : 2, { same: i > 0 }); }
+      for (let i = 0; i < 10; i++) {
+        const a = (i + 0.5) / 10 * TAU + (k ? 0.1 : 0), r1 = i % 2 ? 15 : 16.5;
+        P.line(28 + Math.cos(a) * 10, 13 + y + Math.sin(a) * 10, 28 + Math.cos(a) * r1, 13 + y + Math.sin(a) * r1, LOOSE, 2);
+        if (!(i % 2)) P.line(28 + Math.cos(a) * (r1 + 1), 13 + y + Math.sin(a) * (r1 + 1), 28 + Math.cos(a) * (r1 + 2.6), 13 + y + Math.sin(a) * (r1 + 2.6), PIN, 4);
       }
       // veste (orlo a punte)
       const hem = p2
         ? [[49, 60], [45, 57], [41, 61], [36, 57.5], [31.5, 61.5], [28, 58], [24, 61.5], [19.5, 57.5], [15, 61], [11, 57], [7, 60]]
-        : [[49.5, 64.6], [44.5, 62 + sw], [39, 64.6], [33.5, 62 - sw], [28, 64.6], [22.5, 62 + sw], [17, 64.6], [11.5, 62 - sw], [6.5, 64.6]];
+        : [[49.5, 65.4], [44.5, 63 + sw], [39, 65.4], [33.5, 63 - sw], [28, 65.4], [22.5, 63 + sw], [17, 65.4], [11.5, 63 - sw], [6.5, 65.4]];
       P.poly([[21, 22 + y], [35, 22 + y], [38, 34], [42, 48], ...hem, [14, 48], [18, 34]], R);
       for (const [a, b] of [[22, 15], [25, 21], [31, 35], [34, 41]]) { P.line(a, 36, b, 60, R, 1, { keep: true }); P.line(a + 1, 37, b + 1, 60, R, 3, { keep: true }); }
       hemTrim(P, R, SEAM, 3);
@@ -675,8 +729,8 @@
       const eye = p2 ? [THR, 4] : [GOLD, 3];
       P.stamp(24, 11 + y, ['bcb', 'cgc', 'bcb'], { b: [BTN, 0], c: [BTN, 2], g: eye });
       P.stamp(29, 11 + y, ['bcb', 'cgc', 'bcb'], { b: [BTN, 0], c: [BTN, 2], g: eye });
-      P.stamp(26, 16 + y, ['s.s', '.t.', 's.s'], { s: [STITCH, 1], t: [STITCH, 2] });
-      P.px(31, 15 + y, STITCH, 1); P.px(32, 16 + y, STITCH, 2); P.px(31, 17 + y, STITCH, 1);
+      // bocca cucita a punto croce
+      P.stamp(25, 16 + y, ['.s.s.s.', 'ttttttt', '.s.s.s.'], { s: [STITCH, 2], t: [STITCH, 0] }, { keep: true });
       if (p2) {
         P.line(28, 7 + y, 27, 9 + y, THR, 3); P.line(27, 9 + y, 28, 11 + y, THR, 4, { same: true }); P.px(26, 20 + y, THR, 2);
         P.aura = '#6a2a10';

@@ -5,6 +5,11 @@
 // mantello → braccio dietro → gambe/piedi → gonna/busto → testa → braccio davanti.
 // Arti generati con un "pennello a colonne" pixel-perfetto (niente AA).
 // Frame: _i0 _i1 _bl _w0.._w3 _hu · SPR[nome] = SPR[nome+'_i0'] · HERO_META.
+// Revisione (art director): ciclo di camminata corretto (contatto/passo
+// speculari, piede sollevato giusto), pugno davanti fermo sul punto `hand`
+// in tutti i fotogrammi (l'arma resta in mano), mantello con fodera rossa
+// visibile, palette più fedeli (capelli neri, tunica oliva), testa del
+// Terrariano con la frangia di Terraria.
 // =============================================================================
 (() => {
   const META = (window.HERO_META = window.HERO_META || {});
@@ -37,14 +42,11 @@
       for (let i = 0; i < cols.length; i++) if (cols[i] !== '.') dot(B, x + i, y, cols[i]);
     }
   }
-  // come limb ma la fascia è verticale (avambracci orizzontali): cols dall'alto in basso
-  function limbH(B, x0, y0, x1, y1, cols) {
-    const n = Math.max(1, Math.abs(x1 - x0), Math.abs(y1 - y0));
-    for (let k = 0; k <= n; k++) {
-      const t = k / n, y = Math.round(y0 + (y1 - y0) * t), x = Math.round(x0 + (x1 - x0) * t);
-      for (let i = 0; i < cols.length; i++) if (cols[i] !== '.') dot(B, x, y + i, cols[i]);
-    }
-  }
+  // sposta le righe dal basso verso sinistra (mantello che svolazza)
+  const sweep = (rows, from, every) => rows.map((r, j) => {
+    const k = j < from ? 0 : 1 + Math.floor((j - from) / every);
+    return k ? r.slice(k) + '.'.repeat(k) : r;
+  });
   const HEXC = {};
   const rgb = h => HEXC[h] || (HEXC[h] = [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
   // pal[ch] = colore · outl[ch] = colore del contorno (null = nessuno, assente = OUT)
@@ -74,66 +76,72 @@
     return c;
   }
   const FR = ['_i0', '_i1', '_bl', '_w0', '_w1', '_w2', '_w3', '_hu'];
-  function regHero(name, make, pal, outl, meta) {
-    for (const suf of FR) regSprite(name + suf, bake(make(suf), pal, outl));
+  // padTop: righe trasparenti aggiunte in alto (margine per i passi, quando il corpo sale)
+  function regHero(name, make, pal, outl, meta, padTop = 0) {
+    for (const suf of FR) {
+      const B = make(suf);
+      for (let k = 0; k < padTop; k++) B.unshift(new Array(B[0].length).fill(null));
+      regSprite(name + suf, bake(B, pal, outl));
+    }
     SPR[name] = SPR[name + '_i0'];
-    META[name] = meta;
+    META[name] = { hand: [meta.hand[0], meta.hand[1] + padTop], head: [meta.head[0], meta.head[1] + padTop] };
   }
 
   // ===========================================================================
-  // ZAGREUS (Hades) — 32×44
+  // ZAGREUS (Hades) — 32×45 (griglia 32×44 + 1 riga di margine in alto)
   // Capelli neri ricci con corona d'alloro, occhio destro rosso (sclera nera,
   // dal padre) e sinistro verde (dalla madre), petto nudo con bandoliera,
-  // spallaccio d'oro col teschio, mantello nero foderato di rosso, chitone
-  // rosso dall'orlo bianco "a fiamma", piedi avvolti dal fuoco dello Stige.
+  // spallaccio d'oro col teschio sulla spalla sinistra, mantello nero foderato
+  // di rosso, chitone rosso dall'orlo bianco "a fiamma", piedi nel fuoco dello Stige.
   // ===========================================================================
   const ZW = 32, ZH = 44;
   const ZPAL = {
     // pelle
-    A: '#ffd8b8', a: '#f2b18c', s: '#d68a68', d: '#a55a4a', D: '#6e3138', q: '#8a2a34',
-    // capelli
-    h: '#4b3d63', n: '#2a2036', N: '#150e1d',
+    A: '#f8cca4', a: '#e6a67c', s: '#c8805c', d: '#975440', D: '#62303a',
+    // capelli (neri, riflessi violacei)
+    h: '#3f3350', n: '#251c30', N: '#120c18',
     // alloro
-    L: '#b7e36a', l: '#5faa3a', v: '#2c6430',
+    L: '#b4e070', l: '#5ea83c', v: '#2a5e2e',
     // occhi: 1 rosso, 0 sclera nera, 2 verde, 3 bianco
-    1: '#ff3434', 0: '#1a0c12', 2: '#46e27a', 3: '#f6f0e8',
+    1: '#ff3b3b', 0: '#1a0c12', 2: '#4ae27e', 3: '#f6f0e8',
     // oro
-    Y: '#fff3a6', y: '#f3c24e', o: '#c4862a', O: '#7a4a16',
+    Y: '#fff1a0', y: '#f0c04c', o: '#c08428', O: '#764814',
     // mantello nero / fodera rossa / chitone
-    c: '#3c2438', C: '#231420', g: '#5a3652', R: '#ec4a4e', r: '#b8222e', m: '#7a1428', M: '#4a0e1e',
+    c: '#36161f', C: '#1f0c13', g: '#58222f', R: '#ee4a4c', r: '#bc2430', m: '#7e1628', M: '#4c0e1e',
     // orlo bianco a fiamma
-    W: '#fff6ea', w: '#ffc2a0',
-    // cuoio (bandoliera, cintura, bracciali)
-    B: '#2e2030', b: '#5a4258',
+    W: '#fbefdc', w: '#f2b49a',
+    // cuoio (bandoliera, cintura)
+    B: '#2c1e2c', b: '#56404f',
     // fuoco dello Stige
     F: '#fff2b0', f: '#ffb43c', E: '#ff5a26', e: '#d81e2c', Z: '#82101e',
   };
   const ZOUT = {
-    A: '#3c1820', a: '#3c1820', s: '#3c1820', d: '#3c1820', D: '#3c1820', q: '#3c1820',
-    h: '#0c0710', n: '#0c0710', N: '#0c0710',
+    A: '#3c1820', a: '#3c1820', s: '#3c1820', d: '#3c1820', D: '#3c1820',
+    h: '#0a0610', n: '#0a0610', N: '#0a0610',
     L: '#163a1c', l: '#163a1c', v: '#163a1c',
     Y: '#3a2008', y: '#3a2008', o: '#3a2008', O: '#3a2008',
-    W: '#5a1424', w: '#5a1424',
+    W: '#5a1424', w: '#5a1424', R: '#3a0a16', r: '#3a0a16', m: '#3a0a16', M: '#3a0a16',
     F: null, f: null, E: null, e: null, Z: null,
   };
 
-  // testa (14×13), origine (9,2)
+  // testa (14×13), origine (9,2): corona d'alloro che scende verso la fronte
   const Z_HEAD = [
     '....NN.NNN....',
     '...NnhNnhhNN..',
-    '..NhhnnhhLnLN.',
-    '.NnhnnnLlvLlvL',
-    'NvLlvLlvhhnnN.',
-    'NlnhhnnhnnaAa.',
+    '..NLnnhhnhhnN.',
+    '.NnLlvhnnLnhnN',
+    'NnhnvlLlvLlnLN',
+    'NhnhhnnvlLlvlL',
     'NhnnnhnsNNaNN.',
     '.NnhnsdA01a32a',
     'NnhnhddsaaaaAs',
     'NhnnhNdsaaaas.',
-    '.NhnNNDsaqqs..',
+    '.NhnNNDsasds..',
     '..NN...Dsaas..',
     '........DDs...',
   ];
   const Z_BLINK = ['ddadd']; // (17,9)
+  const Z_OUCH = ['Dd.dD']; // occhi strizzati (colpito)
 
   // busto nudo (13×12), origine (9,14)
   const Z_TORSO = [
@@ -150,7 +158,7 @@
     '..BBBoYoBBB..',
     '..BbbOoObbB..',
   ];
-  // chitone (13×7), origine (9,26)
+  // chitone (13×6), origine (9,26)
   const Z_SKIRT = [
     '..mrRrrrrrm..',
     '..mrRrrmrrrm.',
@@ -159,28 +167,29 @@
     '.mWWwrrWWwrWm',
     '.WWWWwWWWWwWW',
   ];
-  // mantello (dietro), origine (5,14)
+  // mantello (dietro, appeso alla spalla destra), origine (4,14):
+  // esterno nero a sinistra, fodera rossa visibile verso il corpo
   const Z_CAPE = [
-    '....CCCCCC.....',
-    '...CccccccC....',
-    '..Ccgcccccc....',
-    '..Ccgccccc.....',
-    '.Cccgcccc......',
-    '.Cccgccc.......',
-    '.Ccgcccc.......',
-    '.Ccgccc........',
-    'Cccgccc........',
-    'Cccgccc........',
-    'Ccgccmc........',
-    'Ccgccmc........',
-    'Ccgcmrc........',
-    'CcgmrRc........',
-    'CcmrRRc........',
-    'CmrRRrc........',
-    'MrRRrm.........',
-    '.MrrmM.........',
-    '..MM...........',
+    '.....CCCCC...',
+    '...CCcccccC..',
+    '..CccgccRr...',
+    '..CccgcRrm...',
+    '.CccgcRrm....',
+    '.CccgcRrm....',
+    '.CcgccRrm....',
+    '.CcgcRrm.....',
+    'CccgcRrm.....',
+    'CccgcRrm.....',
+    'CcgcRRrm.....',
+    'CcgcRrm......',
+    'CcgcRrm......',
+    'CcgRRrm......',
+    'CcRRrmM......',
+    'CMRrrmM......',
+    '.MrrmM.......',
+    '..MM.........',
   ];
+  const Z_CAPE_FLAP = sweep(Z_CAPE, 9, 4);
   // lembo del mantello sulla spalla dietro, origine (8,14)
   const Z_DRAPE = [
     '..CCCC',
@@ -198,7 +207,7 @@
     'OoyOyO',
     '.OoOo.',
   ];
-  // fiamme ai piedi (6×6), 4 varianti
+  // fiamme ai piedi (7×8), 4 varianti
   const Z_FIRE = [
     ['..Z....', '.ZeZ...', '.eEe.Z.', 'ZeEfZeZ', 'eEfFeEe', 'eEFFfEe', 'eFFFFfe', '.eeeee.'],
     ['....Z..', '...ZeZ.', 'Z..eEe.', 'eZ.ZfeZ', 'eEeEfEe', 'eEfFFEe', 'eFFFFfe', '.eeeee.'],
@@ -207,13 +216,16 @@
   ];
 
   // pose delle gambe: [anca vicina x, piede vicino x, piede vicino y, anca lontana x, piede lontano x, piede lontano y, dy busto]
+  // contatto (w0: avanti la vicina) → passo (w1: si alza la lontana) →
+  // contatto (w2: avanti la lontana) → passo (w3: si alza la vicina)
   const Z_LEGS = {
-    st: [16, 17, 39, 12, 11, 39, 0],
-    w0: [16, 19, 39, 12, 9, 39, 0],
-    w1: [16, 16, 37, 12, 13, 39, -1],
-    w2: [16, 13, 39, 12, 15, 39, 0],
-    w3: [16, 17, 39, 12, 11, 37, -1],
+    st: [15, 17, 39, 13, 11, 39, 0],
+    w0: [15, 18, 39, 13, 10, 39, 0],
+    w1: [15, 15, 39, 13, 14, 37, -1],
+    w2: [15, 11, 39, 13, 17, 39, 0],
+    w3: [15, 16, 37, 13, 13, 39, -1],
   };
+  const Z_HAND = [23, 24]; // pugno davanti: fisso in tutti i fotogrammi
   function zagFrame(suf) {
     const B = buf(ZW, ZH);
     const walk = suf[1] === 'w', ph = walk ? +suf[2] : -1;
@@ -224,11 +236,13 @@
     const hx = hurt ? -1 : 0, hy = hurt ? 1 : 0;
     const fire = walk ? ph : (suf === '_i1' ? 1 : suf === '_hu' ? 2 : 0);
     const by = dy + hy;
-    // mantello (svolazza indietro camminando)
-    put(B, 5 + hx - (walk && ph % 2 ? 1 : 0), 14 + by, Z_CAPE);
+    // braccio dietro: oscilla opposto alla gamba lontana
+    const sw = walk ? [1, 0, -1, 0][ph] : (hurt ? -1 : 0);
+    // mantello (svolazza indietro nei passi e quando è colpito)
+    put(B, 4 + hx, 14 + by, (walk && ph % 2) || hurt ? Z_CAPE_FLAP : Z_CAPE);
     // braccio dietro
-    limb(B, 8 + hx, 16 + by, 8 + hx, 23 + by, ['s', 'd']);
-    put(B, 8 + hx, 24 + by, ['sd']);
+    limb(B, 8 + hx, 16 + by, 8 + hx + sw, 23 + by, ['s', 'd']);
+    put(B, 8 + hx + sw, 24 + by, ['sd']);
     // gambe: lontana più scura, vicina più chiara
     limb(B, L[3], 31, L[4], L[5], ['s', 'd', 'D']);
     limb(B, L[0], 31, L[1], L[2], ['A', 'a', 's', 'd']);
@@ -243,34 +257,37 @@
     put(B, 8 + hx, 14 + by, Z_DRAPE);
     // testa
     put(B, 9 + hx * 2, 2 + by, Z_HEAD);
-    if (suf === '_bl' || hurt) put(B, 17 + hx * 2, 9 + by, Z_BLINK);
-    // braccio davanti: spalla → gomito → pugno
-    limb(B, 20 + hx, 17 + by, 21 + hx, 21 + by, ['a', 's', 'd']);
-    limb(B, 21 + hx, 21 + by, 21 + hx, 22 + by, ['a', 's', 'd']);
-    put(B, 21 + hx, 23 + by, ['oyo']);
-    put(B, 21 + hx, 24 + by, ['Aas', 'asd']);
+    if (suf === '_bl') put(B, 17 + hx * 2, 9 + by, Z_BLINK);
+    if (hurt) put(B, 17 + hx * 2, 9 + by, Z_OUCH);
+    // braccio davanti: spalla → gomito → pugno fermo su Z_HAND
+    const [px, py] = Z_HAND;
+    limb(B, 20 + hx, 18 + by, 21 + hx, 21 + by, ['a', 's', 'd']);
+    limb(B, 21 + hx, 21 + by, px - 1, py - 2, ['A', 'a', 's']);
+    put(B, px - 1, py - 1, ['oyo']);
+    put(B, px - 1, py, ['Aas', 'asd']);
     put(B, 18 + hx, 14 + by, Z_PAULD);
     return B;
   }
-  regHero('zagreus', zagFrame, ZPAL, ZOUT, { hand: [22, 25], head: [16, 2] });
+  regHero('zagreus', zagFrame, ZPAL, ZOUT, { hand: Z_HAND, head: [16, 2] }, 1);
 
   // ===========================================================================
-  // IL TERRARIANO (Terraria) — 28×40
-  // Il personaggio iniziale "classico": testa grande, capelli castani con ciuffo,
-  // occhio bianco con iride, tunica verde oliva senza maniche sopra la camicia
-  // color crema a maniche lunghe, cintura con fibbia di rame, pantaloni marroni
-  // e scarponi grossi. Proporzioni tozze alla Terraria.
+  // IL TERRARIANO (Terraria) — 28×41 (griglia 28×40 + 1 riga di margine in alto)
+  // Il personaggio iniziale "classico" (alla Guida): testa grande, capelli
+  // castani con la frangia che scende sulla fronte, occhio bianco con iride,
+  // tunica verde oliva a maniche corte sopra la camicia color crema a maniche
+  // lunghe, cintura con fibbia di rame, pantaloni marroni e scarponi grossi.
+  // Profilo laterale e proporzioni tozze alla Terraria.
   // ===========================================================================
-  const TW = 28, TH = 38;
+  const TW = 28, TH = 40;
   const TPAL = {
-    S: '#f8cfa2', s: '#e3a677', d: '#b4704c', D: '#7a4434',
-    H: '#c48a4e', h: '#9a5f30', n: '#73411f', N: '#4a2612',
-    w: '#ffffff', i: '#2f56b0',
-    G: '#a6cc66', g: '#6f9c3c', k: '#456e2c', K: '#2b4824',
-    U: '#f6edd4', u: '#d2bf98', v: '#9c8a6a',
-    P: '#a8764a', p: '#7c5030', q: '#56341e',
-    B: '#7a5436', b: '#4e3420', x: '#2e1f14',
-    L: '#5c3a20', C: '#ffbf7a', c: '#c8723a',
+    S: '#f6c79c', s: '#e0a072', d: '#b06c48', D: '#7a4434',
+    H: '#c98a52', h: '#9c5a2e', n: '#713c1e', N: '#4a2412',
+    w: '#ffffff', i: '#34406a',
+    G: '#a3bf55', g: '#7d9a3a', k: '#58722c', K: '#3a4e22',
+    U: '#f2e6c6', u: '#cdb88e', v: '#968260',
+    P: '#9a6a40', p: '#76492a', q: '#52301c',
+    B: '#6a4428', b: '#4a2e1a', x: '#2a1a10',
+    L: '#4e301a', C: '#ffbf7a', c: '#c8723a',
   };
   const TOUT = {
     S: '#3e1e18', s: '#3e1e18', d: '#3e1e18', D: '#3e1e18',
@@ -278,46 +295,50 @@
     G: '#1c2c16', g: '#1c2c16', k: '#1c2c16', K: '#1c2c16',
     U: '#3a3020', u: '#3a3020', v: '#3a3020',
   };
-  // testa (14×14), origine (7,2)
+  // testa (16×14), origine (7,2): frangia a ciocche sulla fronte
   const T_HEAD = [
-    '...NN.NNN......',
-    '..NhhNnhhNN....',
-    '.NhHHhhhhhnNN..',
-    '.NhHhhhhhhhhnN.',
-    'NnhhhhnhhhhhhnN',
-    'NnhhhnhhhnhhhnN',
-    'NnnhnnhhnnhhnN.',
-    'NnnnnnnnSnSnN..',
-    'NnnnnndsSSwiSn.',
-    'NnnnnndsSSwiSs.',
-    '.NnnnNdsSSSSss.',
-    '..NNNNdsSSSSs..',
-    '......ddsssss..',
-    '.......dddd....',
+    '....NN.NNN.....',
+    '...NhhNhHHN....',
+    '..NhHHHHhhhN...',
+    '.NhHHhhhhhhhNN.',
+    'NhhHhhhhhhhhhhN',
+    'NhhhhhhhhhhhhhhN',
+    'NnhhhhhhnhhhShhN',
+    'NnnhhnnhSShSShN.',
+    'NnnnnnhdSSSwiS..',
+    'NnnnnnhdSSSwiSs.',
+    '.NnnnnNdsSSSSs..',
+    '..NnnNNdsSSSs...',
+    '...NN..ddsss....',
+    '.......ddd......',
   ];
-  // busto (12×10), origine (8,16)
+  // busto (11×10), origine (8,16)
   const T_TORSO = [
-    '.gGGUuUGGk..',
-    'gGGGGUGGGgk.',
-    'gGGGGGGGggk.',
-    'gGGGGGGgggk.',
-    'gGGGGGGgggk.',
-    'kgGGGGGggkk.',
-    'LLLLLcCcLLL.',
-    'gGGGGGGGggk.',
-    'gGGGgGGGggkk',
-    'kggkggkggkkk',
+    '..gGUuUGg..',
+    '.gGGGUGGgk.',
+    'gGGgggggggk',
+    'gGgggggggkk',
+    'gggggggggkk',
+    'LLLLLcCcLLL',
+    'gGgggggggkk',
+    'gggggggggkk',
+    'ggggggggkkk',
+    'kkkkkkkkkkK',
   ];
-  const T_SHOE = ['BBBb..', 'BBBBBb', 'bbbbbx'];
+  const T_SHOE = ['BBBBb..', 'BBBBBBb', 'bbbbbbx'];
   const T_SHOE_FAR = ['bbbx..', 'bbbbbx', 'xxxxxx'];
   // [anca vicina x, piede vicino x, piede vicino y, anca lontana x, piede lontano x, piede lontano y, dy busto]
   const T_LEGS = {
-    st: [14, 15, 34, 10, 10, 34, 0],
-    w0: [14, 17, 34, 10, 8, 34, 0],
-    w1: [14, 14, 33, 10, 11, 34, -1],
-    w2: [14, 12, 34, 10, 13, 34, 0],
-    w3: [14, 15, 34, 10, 10, 33, -1],
+    st: [13, 14, 36, 11, 10, 36, 0],
+    w0: [13, 16, 36, 11, 9, 36, 0],
+    w1: [13, 13, 36, 11, 12, 34, -1],
+    w2: [13, 9, 36, 11, 16, 36, 0],
+    w3: [13, 14, 34, 11, 11, 36, -1],
   };
+  const T_HAND = [20, 23]; // pugno davanti: fisso in tutti i fotogrammi
+  // braccio davanti: parte alta (segue il busto) e avambraccio+pugno (fermi)
+  const T_ARM_UP = ['KgGk', 'KggK', 'KkkK', '.vUu'];
+  const T_ARM_LO = ['..vUu.', '...vUS', '....sd'];
   function terrFrame(suf) {
     const B = buf(TW, TH);
     const walk = suf[1] === 'w', ph = walk ? +suf[2] : -1;
@@ -326,24 +347,29 @@
     if (suf === '_i1') dy = 1;
     const hurt = suf === '_hu';
     const hx = hurt ? -1 : 0, by = dy + (hurt ? 1 : 0);
-    const sw = walk ? (ph === 0 ? 1 : ph === 2 ? -1 : 0) : 0; // oscillazione braccia
-    // braccio dietro
-    limb(B, 8 + hx, 17 + by, 7 + hx - sw, 23 + by, ['u', 'v']);
-    put(B, 7 + hx - sw, 24 + by, ['sd']);
+    // braccio dietro: avanti quando la gamba lontana è indietro (w0) e viceversa
+    const sw = walk ? [1, 0, -1, 0][ph] : 0;
+    limb(B, 9 + hx, 17 + by, 8 + hx + sw, 19 + by, ['k', 'K']);
+    limb(B, 8 + hx + sw, 20 + by, 8 + hx + sw * 2, 22 + by, ['u', 'v']);
+    put(B, 8 + hx + sw * 2, 23 + by, ['sd']);
     // gambe e scarponi
-    limb(B, Lg[3], 25, Lg[4], Lg[5] - 1, ['p', 'q', 'q']);
+    limb(B, Lg[3], 26, Lg[4], Lg[5] - 1, ['p', 'q', 'q']);
     put(B, Lg[4] - 1, Lg[5], T_SHOE_FAR);
-    limb(B, Lg[0], 25, Lg[1], Lg[2] - 1, ['P', 'p', 'q']);
+    limb(B, Lg[0], 26, Lg[1], Lg[2] - 1, ['P', 'P', 'p', 'q']);
     put(B, Lg[1] - 1, Lg[2], T_SHOE);
     // busto e testa
     put(B, 8 + hx, 16 + by, T_TORSO);
     put(B, 7 + hx * 2, 2 + by, T_HEAD);
-    if (suf === '_bl' || hurt) put(B, 17 + hx * 2, 10 + by, hurt ? ['DS', 'SD'] : ['SS', 'DD']);
-    // braccio davanti: manica crema, avambraccio in avanti, pugno pronto
-    limb(B, 17 + hx, 17 + by, 17 + hx + sw, 20 + by, ['U', 'u', 'v']);
-    limbH(B, 18 + hx + sw, 21 + by, 19 + hx + sw, 21 + by, ['U', 'u']);
-    put(B, 20 + hx + sw, 21 + by, ['Ss', 'sd']);
+    if (suf === '_bl') put(B, 18 + hx * 2, 10 + by, ['SS', 'dd']);
+    if (hurt) put(B, 18 + hx * 2, 10 + by, ['dD', 'Ss']);
+    // braccio davanti: manica corta oliva (staccata dal busto da una linea scura),
+    // avambraccio crema piegato in avanti, pugno pronto fermo su T_HAND
+    const [px, py] = T_HAND;
+    put(B, 15, 20, T_ARM_UP.slice(3)); // gomito fermo: niente buchi quando il busto sale
+    put(B, 14 + hx, 17 + by, T_ARM_UP);
+    put(B, px - 5, py - 2, T_ARM_LO);
     return B;
   }
-  regHero('terrarian', terrFrame, TPAL, TOUT, { hand: [21, 22], head: [13, 2] });
+  regHero('terrarian', terrFrame, TPAL, TOUT, { hand: T_HAND, head: [14, 2] }, 1);
+
 })();
