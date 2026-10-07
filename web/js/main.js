@@ -334,7 +334,7 @@ function spawner(dt) {
   const alive = G.enemies.length;
   const t = Math.min(G.t, 1500);
   const rate = 1.4 + Math.min(t, 600) / 36 + Math.max(0, t - 600) / 85;
-  G.spawnAcc += dt * rate * (1 + 0.35 * (n - 1)) * (G.curse || 1) * (G.spawnMul || 1) * (G.spawnBoost || 1) * (G.bossE ? 0.3 : 1);
+  G.spawnAcc += dt * rate * (1 + 0.35 * (n - 1)) * (G.curse || 1) * (G.spawnMul || 1) * (G.spawnBoost || 1) * (G.bossE ? 0.15 : G.miniOn ? 0.55 : 1);
   const cap = 300 + 40 * (n - 1);
   while (G.spawnAcc >= 1) {
     G.spawnAcc -= 1;

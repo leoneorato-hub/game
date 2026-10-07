@@ -179,7 +179,7 @@ const WEAPONS = {
       if (!tick(w, dt)) return;
       const p = G.p;
       const r = 62 * G.s.area * (1 + (w.lvl >= 3 ? 0.15 : 0) + (w.lvl >= 6 ? 0.15 : 0));
-      let n = 0; GRID.query(p.x, p.y, r * 0.8, () => n++);
+      let n = 0; GRID.query(p.x, p.y, r * 0.8, e => { n += crowdW(e); });
       if (n < 8 || !canSpend(33)) { w.t = 0.2; return; }
       addSoul(-33);
       const dmg = 30 * 0.6 * lvMul(w, 0.15);
@@ -232,7 +232,7 @@ const WEAPONS = {
         return;
       }
       if (!tick(w, dt)) return;
-      let n = 0; GRID.query(p.x, p.y, 40, () => n++);
+      let n = 0; GRID.query(p.x, p.y, 40, e => { n += crowdW(e); });
       if (n < 4) { w.t = 0.2; return; }
       w.spin = 0.6 + (w.lvl >= 6 ? 0.25 : 0); w.st = 0;
       setCd(w, 3.4 * G.s.cd * (w.lvl >= 4 ? 0.9 : 1));
@@ -371,7 +371,8 @@ const WEAPONS = {
     update(w, dt) {
       if (!tick(w, dt)) return;
       const p = G.p;
-      const list = foesIn(p.x, p.y, 220).filter(e => !e.boss && !e.pull && d2(e.x, e.y, p.x, p.y) > 50 * 50).sort((a, b) => b.hp - a.hp);
+      // non si possono trascinare boss, punti deboli, riflessi e ancore (tutto ciò che è "ancorato")
+      const list = foesIn(p.x, p.y, 220).filter(e => !e.boss && !e.anchored && !e.pull && d2(e.x, e.y, p.x, p.y) > 50 * 50).sort((a, b) => b.hp - a.hp);
       if (!list.length) { w.t = 0.3; return; }
       const n = 1 + (w.lvl >= 4 ? 1 : 0) + (w.lvl >= 7 ? 1 : 0);
       const dmg = 22 * lvMul(w, 0.2);
@@ -748,8 +749,11 @@ const WEAPONS = {
     update(w, dt) {
       if (!prayerReady(w)) return;
       const p = G.p;
-      const dirs = w.lvl >= 6 ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[1, 0], [-1, 0]];
       if (!densestCardinal(p.x, p.y, 200, 3)) return;
+      // le onde si orientano verso il nemico più temibile (boss, élite, punto debole) se è vicino
+      const big = nearest(p.x, p.y, 200, e => e.boss || e.elite || e.type === 'bosspart');
+      const a0 = big ? Math.atan2(big.y - p.y, big.x - p.x) : 0;
+      const dirs = (w.lvl >= 6 ? [0, Math.PI, Math.PI / 2, -Math.PI / 2] : [0, Math.PI]).map(a => [Math.cos(a0 + a), Math.sin(a0 + a)]);
       castPrayer(w);
       const dmg = 40 * lvMul(w, 0.15);
       for (const [dx, dy] of dirs) shoot({ x: p.x, y: p.y, vx: dx * 240, vy: dy * 240, r: 9, dmg, pierce: 999, life: 1 * (w.lvl >= 4 ? 1.2 : 1), kind: 'wave', col: '#e2c46a', src: 'verdiales', kb: 120 });
@@ -761,8 +765,8 @@ const WEAPONS = {
     update(w, dt) {
       if (!prayerReady(w)) return;
       const p = G.p;
-      const list = foesIn(p.x, p.y, 220);
-      if (list.length < 3) return;
+      const list = foesIn(p.x, p.y, 220).filter(e => !e.immune);
+      if (list.reduce((a, e) => a + crowdW(e), 0) < 3) return;
       castPrayer(w);
       const n = 4 + (w.lvl >= 3) + (w.lvl >= 6) + (w.lvl >= 8 ? 2 : 0);
       const dmg = 45 * lvMul(w, 0.15);
@@ -784,7 +788,7 @@ const WEAPONS = {
       }
       if (!prayerReady(w)) return;
       const p = G.p;
-      let n0 = 0; GRID.query(p.x, p.y, 80, () => n0++);
+      let n0 = 0; GRID.query(p.x, p.y, 80, e => { n0 += crowdW(e); });
       if (n0 < 5) return;
       castPrayer(w);
       const n = 6 + (w.lvl >= 3 ? 2 : 0) + (w.lvl >= 6 ? 2 : 0);
@@ -807,7 +811,7 @@ const WEAPONS = {
         return;
       }
       if (!prayerReady(w)) return;
-      let n = 0; GRID.query(p.x, p.y, 60, () => n++);
+      let n = 0; GRID.query(p.x, p.y, 60, e => { n += crowdW(e); });
       if (p.hp > p.maxHp * 0.6 && n < 12) return;
       castPrayer(w);
       p.tientoT = (5 + 0.5 * ((w.lvl >= 2) + (w.lvl >= 4) + (w.lvl >= 5)) + (w.lvl >= 8 ? 1 : 0)) * G.s.duration;

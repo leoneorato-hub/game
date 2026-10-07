@@ -271,7 +271,39 @@ function render(c) {
     if (b.dead) continue;
     const x = Math.round(b.x - camX), y = Math.round(b.y - camY);
     if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+    // sospesi (telegrafo): lampeggiano finché non partono
+    c.globalAlpha = b.wait > 0 ? 0.55 + 0.35 * Math.sin(G.t * 18) : 1;
     light(b.x, b.y, 16, b.col);
+    if (b.kind === 'sword') {
+      const [dx, dy] = norm(b.vx, b.vy);
+      c.strokeStyle = INK; c.lineWidth = 5; c.beginPath(); c.moveTo(x - dx * 13, y - dy * 13); c.lineTo(x + dx * 5, y + dy * 5); c.stroke();
+      c.strokeStyle = b.col; c.lineWidth = 3; c.stroke();
+      c.strokeStyle = '#ffffff'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - dx * 8, y - dy * 8); c.lineTo(x + dx * 4, y + dy * 4); c.stroke();
+      c.strokeStyle = '#e2b04a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x - dx * 9 - dy * 4, y - dy * 9 + dx * 4); c.lineTo(x - dx * 9 + dy * 4, y - dy * 9 - dx * 4); c.stroke();
+      c.lineWidth = 1; light(b.x, b.y, 26, b.col); continue;
+    }
+    if (b.kind === 'flame') {
+      const f = Math.sin(G.t * 30 + b.x) > 0;
+      c.fillStyle = INK; c.beginPath(); c.arc(x, y, b.r + 2, 0, TAU); c.fill();
+      c.fillStyle = '#e0501a'; c.beginPath(); c.arc(x, y, b.r + 1, 0, TAU); c.fill();
+      c.fillStyle = f ? '#ffd23f' : '#ff9a2a'; c.beginPath(); c.arc(x, y - 1, b.r - 1, 0, TAU); c.fill();
+      c.fillStyle = '#fff2b0'; c.fillRect(x - 1, y - 2, 2, 2);
+      if (G.frame % 3 === 0 && b.wait === undefined) G.fx.push({ k: 'p', x: b.x + rnd(-2, 2), y: b.y, vx: -b.vx * 0.1, vy: -20, life: 0.3, max: 0.3, col: '#ff8a2a', size: 2 });
+      light(b.x, b.y, 24, '#ff8a2a'); continue;
+    }
+    if (b.kind === 'bolt') {
+      const [dx, dy] = norm(b.vx, b.vy);
+      c.strokeStyle = INK; c.lineWidth = 5; c.beginPath(); c.moveTo(x - dx * 10, y - dy * 10); c.lineTo(x + dx * 3, y + dy * 3); c.stroke();
+      c.strokeStyle = b.col; c.lineWidth = 3; c.stroke();
+      c.strokeStyle = '#ffffff'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - dx * 5, y - dy * 5); c.lineTo(x + dx * 2, y + dy * 2); c.stroke();
+      c.lineWidth = 1; light(b.x, b.y, 22, b.col); continue;
+    }
+    if (b.kind === 'skull') {
+      c.fillStyle = INK; c.beginPath(); c.arc(x, y, b.r + 2, 0, TAU); c.fill();
+      c.fillStyle = '#efe6d2'; c.beginPath(); c.arc(x, y - 1, b.r + 1, 0, TAU); c.fill(); c.fillRect(x - 2, y + 1, 4, 2);
+      c.fillStyle = b.col; c.fillRect(x - 2, y - 2, 1, 2); c.fillRect(x + 1, y - 2, 1, 2);
+      light(b.x, b.y, 20, b.col); continue;
+    }
     if (b.kind === 'spear' || b.kind === 'pin') {
       const [dx, dy] = norm(b.vx, b.vy), L = b.kind === 'spear' ? 9 : 5;
       c.strokeStyle = INK; c.lineWidth = 4; c.beginPath(); c.moveTo(x - dx * L, y - dy * L); c.lineTo(x + dx * 3, y + dy * 3); c.stroke();
@@ -285,6 +317,7 @@ function render(c) {
     c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(x - 1, y - b.r + 1, 1, 1);
     if (b.kind === 'note') { c.fillStyle = INK; c.fillRect(x + 1, y - 6, 1, 6); }
   }
+  c.globalAlpha = 1;
   G.stage.drawOver?.(c);
   drawFx(c);
   drawAmbient(c);
@@ -574,7 +607,9 @@ function drawHUD(c) {
     if (el !== undefined && el < G.times.boss) next = (G.stage.story ? 'MINI-BOSS' : 'ÉLITE') + ' tra ' + fmtTime(el - t);
     else if (t < G.times.boss) next = 'BOSS tra ' + fmtTime(G.times.boss - t);
   } else if (G.bossE && !G.bossE.dead && Number.isFinite(G.times.cont) && t < G.times.cont) next = 'IL CONTINUE tra ' + fmtTime(G.times.cont - t);
-  if (next) txt(c, next, W / 2, 40, '#a89a88', 8, 'center');
+  // con la barra di un boss in vista, il prossimo evento scende sotto la barra
+  const barOn = (G.bossE && !G.bossE.dead && G.bossE.type !== 'cont') || G.enemies.some(e => !e.dead && e.def && e.def.mini);
+  if (next) txt(c, next, W / 2, barOn ? 73 : 40, '#a89a88', 8, 'center');
 
   // C — Contatori con icone
   panelFrame(c, W - 92, 16, 86, 22);
@@ -585,17 +620,36 @@ function drawHUD(c) {
   if (G.straw) { c.drawImage(SPR.strawberry.img, W - 40, 18, 8, 10); txt(c, String(G.straw), W - 30, 19, '#ff7a8a'); }
 
   // Barra del boss: targa con il nome, scia del danno, teschi alle estremità
-  const B = G.bossE;
+  let B = G.bossE;
+  if (!B || B.dead) B = G.enemies.find(e => !e.dead && e.def && e.def.mini) || B;
   if (B && !B.dead && B.type !== 'cont') {
-    const bw = 300, bx = W / 2 - bw / 2, by = 54;
-    txt(c, ETYPES[B.type].name.toUpperCase(), W / 2, 44, BOSSES[B.type]?.col || '#efe6d2', 8, 'center');
-    bar(c, bx, by, bw, 6, B.hp / B.maxHp, '#c41e2a', null, 'boss');
+    const mini = !!(B.def && B.def.mini);
+    const bw = mini ? 200 : 300, bx = W / 2 - bw / 2, by = 54;
+    txt(c, (mini ? 'MINI-BOSS · ' : '') + ETYPES[B.type].name.toUpperCase(), W / 2, 44, BOSSES[B.type]?.col || '#efe6d2', 8, 'center');
+    bar(c, bx, by, bw, 6, B.hp / B.maxHp, mini ? '#e0303a' : '#c41e2a', null, 'boss');
     for (const sx of [bx - 9, bx + bw + 1]) c.drawImage(icon('skull', '#efe6d2', '#5a1e24'), sx, by - 2);
+    const PH = B.def && B.def.phases;
+    if (PH) {
+      // tacche delle soglie di fase: diventano scure quando la fase è superata
+      for (let k = 1; k < PH.length; k++) {
+        const tx = Math.round(bx + bw * PH[k].at), done = B.phase >= k;
+        c.fillStyle = INK; c.fillRect(tx - 2, by - 3, 4, 12);
+        c.fillStyle = done ? '#5a4a3a' : '#ffe680'; c.fillRect(tx - 1, by - 2, 2, 10);
+      }
+    }
     let tag = '';
     if (B.type === 'capo') tag = B.stunT > 0 ? 'STORDITO: DANNO PIENO' : 'DANNO RIDOTTO −90%';
     if (B.type === 'spola') { const a = B.anchors.filter(x => !x.dead).length; tag = a ? 'ROCCHETTI-ANCORA: ' + a + ' (si rigenera)' : 'ANCORE DISTRUTTE'; }
     if (B.type === 'bronzo') tag = B.state === 'inside' ? 'CUORE ESPOSTO ×3' : B.state === 'lift' ? 'SI SOLLEVA!' : 'BRONZO: DANNO −50%';
-    if (B.p2) tag = tag || 'SECONDA FASE';
+    if (PH) {
+      const P = PH[B.phase || 0];
+      tag = 'FASE ' + ((B.phase || 0) + 1) + '/' + PH.length + ' · ' + (P.name || '').toUpperCase();
+      const parts = B.parts ? B.parts.filter(q => !q.dead && q.shield).length : 0;
+      if (B.trans > 0) tag = 'LA FASE CAMBIA…';
+      else if (parts) tag = (B.def.partTag || 'PUNTI DEBOLI') + ': ' + parts + ' · È PROTETTO';
+      else if (B.guarding) tag = 'SCUDO ALZATO: COLPISCI ALLE SPALLE';
+      else if (B.parry > 0) tag = 'PARATA!';
+    } else if (B.p2) tag = tag || 'SECONDA FASE';
     if (B.stunned > 0) tag = 'VULNERABILE!';
     if (tag) txt(c, tag, W / 2, 63, '#e2b04a', 8, 'center');
     if (B.type === 'bronzo') bar(c, bx + 60, 73, bw - 120, 2, B.res || 0, '#d9a83a');

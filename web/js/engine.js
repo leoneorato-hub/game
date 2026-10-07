@@ -56,8 +56,9 @@ const GRID = {
 function nearest(x, y, r, filter) {
   let best = null, bd = Infinity;
   GRID.query(x, y, r, e => {
-    if (e.prop || (filter && !filter(e))) return;
-    const d = d2(x, y, e.x, e.y);
+    if (e.prop || e.immune || e.hidden || (filter && !filter(e))) return;
+    // priorità morbida a boss, mini-boss e punti deboli: contano come se fossero molto più vicini
+    const d = d2(x, y, e.x, e.y) * (e.boss || e.elite || e.type === 'bosspart' ? 0.3 : 1);
     if (d < bd) { bd = d; best = e; }
   });
   return best;
@@ -79,12 +80,15 @@ function densest(x, y, r) {
 }
 
 // Direzione cardinale con più nemici (Spirito Vendicativo, Verdiales…)
+// Per le armi "da folla" (incantesimi, preghiere, rotazioni) un boss, un mini-boss o un punto
+// debole contano come una piccola folla: così funzionano anche negli scontri contro i boss.
+const crowdW = e => (e.boss || e.elite || e.type === 'bosspart' ? 8 : 1);
 function densestCardinal(x, y, r, min = 1) {
   const c = [0, 0, 0, 0];
   GRID.query(x, y, r, e => {
-    if (e.prop) return;
+    if (e.prop || e.immune) return;
     const dx = e.x - x, dy = e.y - y;
-    if (Math.abs(dx) >= Math.abs(dy)) c[dx >= 0 ? 0 : 1]++; else c[dy >= 0 ? 2 : 3]++;
+    if (Math.abs(dx) >= Math.abs(dy)) c[dx >= 0 ? 0 : 1] += crowdW(e); else c[dy >= 0 ? 2 : 3] += crowdW(e);
   });
   let bi = -1, bc = min - 1;
   for (let i = 0; i < 4; i++) if (c[i] > bc) { bc = c[i]; bi = i; }
@@ -192,7 +196,9 @@ function hurtEnemy(e, dmg, o = {}) {
   if (e.guard) d *= e.guard(e, o);
   if (e.bunkerT > 0) d *= 1.3;
   e.hp -= d;
-  e.flash = 0.07; e.pop = 0.12;
+  // i boss lampeggiano al massimo 4 volte al secondo: sotto il fuoco continuo restano leggibili
+  if (!(e.boss || e.elite) || !(e.flashCd > 0)) { e.flash = 0.07; if (e.boss || e.elite) e.flashCd = 0.25; }
+  e.pop = 0.12;
   if (crit && owned('frost') && !e.boss) e.freezeT = Math.max(e.freezeT, 1);
   if (o.kb && !e.boss) {
     const k = o.kb * (1 - (e.kbRes || 0));
@@ -211,6 +217,7 @@ function hurtEnemy(e, dmg, o = {}) {
   if (e.linkT > 0) e.linkT -= 0.01;
   if (SET.dmgNums || crit) fxText(e.x + rnd(-4, 4), e.y - e.r - 4, crit ? Math.round(d) + '!' : Math.round(d), crit ? '#ffd23f' : '#fff', 0.5);
   if (!o.silent) { sfx('hit'); if (G.fx.length < 700) for (let i = 0; i < 2; i++) { const a = Math.atan2(o.ky || rnd(-1, 1), o.kx || rnd(-1, 1)) + rnd(-0.9, 0.9), sp = rnd(60, 140); G.fx.push({ k: 'spark', x: e.x, y: e.y - 2, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.18, max: 0.18, col: crit ? '#ffd23f' : '#fff6e0' }); } }
+  if (e.hpFloor && e.hp < e.hpFloor) e.hp = e.hpFloor;
   if (e.hp <= 0) killEnemy(e, o);
   return d;
 }
@@ -325,6 +332,7 @@ function updateEnemies(dt) {
     if (multi) { tgt = e.prop ? G.cur : nearestPl(e.x, e.y); p = tgt.p; }
     e.t += dt;
     if (e.flash > 0) e.flash -= dt;
+    if (e.flashCd > 0) e.flashCd -= dt;
     if (e.lastSrcT > 0) e.lastSrcT -= dt;
     if (e.bunkerT > 0) e.bunkerT -= dt;
     if (e.weakT > 0) e.weakT -= dt;
@@ -501,6 +509,8 @@ function updateEProjs(dt) {
   for (const b of G.eprojs) {
     if (b.dead) continue;
     b.life -= dt;
+    if (b.wait > 0) { b.wait -= dt; if (b.life <= 0) b.dead = true; continue; }
+    if (b.ax) { b.vx += b.ax * dt; b.vy += b.ay * dt; }
     const tgt = multi ? nearestPl(b.x, b.y) : G.cur, p = tgt ? tgt.p : G.p;
     if (b.homing) {
       const sp = Math.hypot(b.vx, b.vy);
